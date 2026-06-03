@@ -73,6 +73,29 @@ def create_vector_db(case_id, judgments_data):
     print(f"Created {len(all_data)} chunks with metadata for case {case_id}. Saved to {path}.")
     return True
 
+def add_to_vector_db(case_id, text, metadata):
+    """
+    Chunks new text and appends to existing vector data.
+    """
+    path = _get_storage_path(case_id)
+    all_data = []
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as f:
+            all_data = json.load(f)
+    
+    chunks = chunk_text(text)
+    for chunk in chunks:
+        all_data.append({
+            "text": chunk,
+            "metadata": metadata
+        })
+    
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(all_data, f)
+    
+    print(f"Added {len(chunks)} new chunks for case {case_id} to {path}.")
+    return True
+
 def get_relevant_chunks(case_id, query, top_k=5):
     """
     Simple keyword-based retrieval from persistent storage.

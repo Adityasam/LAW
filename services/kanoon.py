@@ -5,7 +5,7 @@
 # Indian Kanoon uses HTTP Basic Auth — supply (api_key, "") as the tuple.
 # ---------------------------------------------------------------------------
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import requests
 from requests.exceptions import RequestException

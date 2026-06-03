@@ -103,6 +103,7 @@ class Document(db.Model):
     file_type      = db.Column(db.String(20))                          # pdf, docx, jpg ...
     file_size      = db.Column(db.Integer, default=0)                   # bytes
     extracted_text = db.Column(db.Text, default="")                    # OCR / pdfplumber output
+    summary        = db.Column(db.Text, default="")                    # Gemini-generated summary
     uploaded_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     def to_dict(self) -> dict:
@@ -113,6 +114,7 @@ class Document(db.Model):
             "original_name": self.original_name,
             "file_type": self.file_type,
             "file_size": self.file_size,
+            "summary": self.summary,
             "uploaded_at": self.uploaded_at.isoformat(),
         }
 

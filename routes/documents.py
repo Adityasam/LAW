@@ -11,6 +11,8 @@ from flask import Blueprint, current_app, jsonify, request
 from werkzeug.utils import secure_filename
 
 from models import Document, db
+from services.doc_processor import process_document
+from chunker import add_to_vector_db
 
 documents_bp = Blueprint("documents", __name__)
 
@@ -57,16 +59,39 @@ def upload_document(case_id: int):
 
     size = target.stat().st_size
 
+    # 1. Process document with Gemini (OCR + Summary)
+    try:
+        extracted_text, summary = process_document(str(target))
+    except Exception as e:
+        print(f"Error processing document {original}: {e}")
+        extracted_text = ""
+        summary = "Error processing document summary."
+
+    # 2. Save to database
     doc = Document(
         case_id        = case_id,
         filename       = stored,
         original_name  = original,
         file_type      = ext,
         file_size      = size,
-        extracted_text = "",  # OCR / pdfplumber pipeline to be added later
+        extracted_text = extracted_text,
+        summary        = summary,
     )
     db.session.add(doc)
     db.session.commit()
+
+    # 3. Add to vector DB for RAG
+    if extracted_text:
+        add_to_vector_db(
+            case_id, 
+            extracted_text, 
+            {
+                "title": f"Document: {original}",
+                "type": "uploaded_document",
+                "filename": stored,
+                "original_name": original
+            }
+        )
 
     # Return the full list of documents for this case to keep UI in sync
     docs = Document.query.filter_by(case_id=case_id).all()

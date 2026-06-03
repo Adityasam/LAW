@@ -254,12 +254,19 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         case = Case.query.get(case_id)
         case_facts = case.facts if case else ""
         
-        # 2. Get RAG context
+        # 2. Fetch document summaries
+        doc_summaries = []
+        if case:
+            for doc in case.documents:
+                if doc.summary:
+                    doc_summaries.append({"name": doc.original_name, "summary": doc.summary})
+
+        # 3. Get RAG context
         relevant = get_relevant_chunks(case_id, user_msg)
         
         def generate():
             full_response = ""
-            for text in stream_legal_chat(user_msg, relevant, history, case_facts):
+            for text in stream_legal_chat(user_msg, relevant, history, case_facts, doc_summaries):
                 full_response += text
                 yield text
             

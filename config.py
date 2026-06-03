@@ -6,8 +6,10 @@
 # ---------------------------------------------------------------------------
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 
 
 class Config:
@@ -33,12 +35,12 @@ class Config:
         "pdf", "doc", "docx", "txt", "jpg", "jpeg", "png",
     }
 
-    # --- External API keys (placeholders) ---
-    # Replace with real values from environment variables in production.
+    # --- External API keys ---
     INDIAN_KANOON_API_KEY = os.environ.get("INDIAN_KANOON_API_KEY", "")
     INDIAN_KANOON_BASE_URL = "https://api.indiankanoon.org"
 
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+    GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME", "models/gemini-3.1-flash-lite-preview")
 
     # --- App metadata ---
     APP_NAME = "VakilAI"
