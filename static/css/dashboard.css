@@ -1,0 +1,224 @@
+/* -------------------------------------------------------------------------
+   Dashboard page — VakilAI
+   Two-column grid: stats on the left, recent-cases list on the right.
+   The new-case modal lives in dashboard.html and uses the shared
+   .modal / .field styles from styles.css.
+   ------------------------------------------------------------------------- */
+
+.dashboard{
+  background:var(--bg);
+  min-width:0;
+  display:flex; flex-direction:column;
+  opacity:0;
+  transform:translateY(8px);
+  animation: fadeIn .6s ease forwards .18s;
+  flex:1;
+  overflow-y:auto;
+}
+.dash-header{
+  padding:28px 36px 22px;
+  border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg, #10101A 0%, #0C0C14 100%);
+  display:flex; align-items:flex-end; justify-content:space-between;
+  gap:24px;
+  flex-wrap:wrap;
+}
+.dash-header .lhs .eyebrow{
+  font-size:10.5px; color:var(--gold);
+  letter-spacing:2px; text-transform:uppercase;
+  margin-bottom:8px;
+}
+.dash-header h2{
+  font-size:32px; color:var(--text);
+  margin-bottom:6px;
+}
+.dash-header .sub{
+  font-size:13px; color:var(--muted-2);
+  max-width:560px;
+  line-height:1.55;
+}
+
+.dash-body{
+  flex:1;
+  overflow-y:auto;
+  padding:26px 36px 36px;
+  display:flex; flex-direction:column; gap:24px;
+}
+
+/* ---------- Stat strip ---------- */
+.stat-grid{
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:14px;
+}
+.stat{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:18px 20px;
+  display:flex; align-items:center; gap:14px;
+  transition:border-color .2s, transform .2s;
+}
+.stat:hover{ border-color:var(--border-2); transform:translateY(-1px); }
+.stat .ic{
+  width:38px; height:38px; border-radius:8px;
+  background:var(--gold-soft);
+  color:var(--gold);
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+}
+.stat .ic svg{ width:18px; height:18px; }
+.stat .num{
+  font-family:'Cormorant Garamond', serif;
+  font-size:28px; font-weight:600;
+  color:var(--text);
+  line-height:1;
+}
+.stat .lbl{
+  font-size:11px; color:var(--muted);
+  letter-spacing:1.2px; text-transform:uppercase;
+  margin-top:3px;
+}
+
+/* ---------- Empty state ---------- */
+.empty{
+  text-align:center;
+  padding:80px 24px;
+  color:var(--muted-2);
+}
+.empty .ic{
+  width:56px; height:56px; border-radius:14px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  margin:0 auto 18px;
+  color:var(--gold);
+}
+.empty .ic svg{ width:24px; height:24px; }
+.empty h3{
+  font-size:24px; color:var(--text);
+  margin-bottom:8px;
+}
+.empty p{
+  font-size:13.5px; color:var(--muted-2);
+  max-width:380px;
+  margin:0 auto 22px;
+  line-height:1.6;
+}
+
+/* ---------- Case list rows ---------- */
+.case-table{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+}
+.case-table-head{
+  display:grid;
+  grid-template-columns: 1.8fr 1.2fr 1fr 0.8fr 0.9fr 60px;
+  gap:12px;
+  padding:14px 22px;
+  font-size:10.5px; color:var(--muted);
+  letter-spacing:1.4px; text-transform:uppercase;
+  border-bottom:1px solid var(--border);
+  background:var(--surface-2);
+}
+.case-row{
+  display:grid;
+  grid-template-columns: 1.8fr 1.2fr 1fr 0.8fr 0.9fr 60px;
+  gap:12px;
+  padding:14px 22px;
+  align-items:center;
+  border-bottom:1px solid var(--border);
+  cursor:pointer;
+  transition:background .2s;
+}
+.case-row:last-child{ border-bottom:none; }
+.case-row:hover{ background:var(--surface-2); }
+.case-row .ctitle{
+  font-family:'Cormorant Garamond', serif;
+  font-size:17px; font-weight:600;
+  color:var(--text);
+  line-height:1.2;
+}
+.case-row .ctitle .cid{
+  font-size:10.5px; color:var(--muted);
+  letter-spacing:1.4px; text-transform:uppercase;
+  display:block; margin-top:3px;
+  font-family:'DM Sans', sans-serif;
+  font-weight:400;
+}
+.case-row .cell{
+  font-size:12.5px; color:var(--muted-2);
+  line-height:1.4;
+}
+.case-row .cell b{ color:var(--text); font-weight:500; }
+.case-row .open{
+  display:flex; align-items:center; justify-content:flex-end;
+  color:var(--muted-2);
+}
+.case-row:hover .open{ color:var(--gold); }
+.case-row .open svg{ width:16px; height:16px; }
+
+/* ---------- New-case modal extra pieces ---------- */
+.upload-list{
+  display:flex; flex-direction:column; gap:8px;
+  margin-top:6px;
+}
+.upload-list:empty::before{
+  content:'No files chosen yet';
+  color:var(--muted);
+  font-size:12px;
+  font-style:italic;
+}
+.upload-item{
+  display:flex; align-items:center; gap:12px;
+  padding:10px 12px;
+  background:var(--surface-2);
+  border:1px solid var(--border);
+  border-radius:6px;
+}
+.upload-item .ic{
+  width:28px; height:28px; border-radius:5px;
+  background:rgba(201,162,88,0.08);
+  color:var(--gold);
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+}
+.upload-item .ic svg{ width:13px; height:13px; }
+.upload-item .meta{ flex:1; min-width:0; }
+.upload-item .meta .n{
+  font-size:13px; color:var(--text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.upload-item .meta .s{
+  font-size:11px; color:var(--muted);
+  margin-top:1px;
+}
+.upload-item .rm{
+  width:26px; height:26px; border-radius:5px;
+  color:var(--muted-2);
+  display:flex; align-items:center; justify-content:center;
+  transition:background .2s, color .2s;
+}
+.upload-item .rm:hover{ background:rgba(122,41,41,0.15); color:#D07070; }
+.upload-item .rm svg{ width:12px; height:12px; }
+
+.drop-zone{
+  border:1.5px dashed var(--border-2);
+  border-radius:8px;
+  padding:18px 16px;
+  text-align:center;
+  color:var(--muted-2);
+  background:transparent;
+  transition:border-color .3s, background .3s;
+  cursor:pointer;
+}
+.drop-zone:hover{
+  border-color:var(--gold);
+  background:var(--gold-soft);
+  animation: pulseBorder 1.2s ease-in-out infinite;
+}
+.drop-zone .t{ font-size:13px; color:var(--text); }
+.drop-zone .s{ font-size:11.5px; color:var(--muted); margin-top:3px; }
+.drop-zone input[type=file]{ display:none; }

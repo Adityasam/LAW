@@ -1,0 +1,72 @@
+{# -----------------------------------------------------------------
+   VakilAI — shared HTML skeleton.
+   Every page extends this and fills in:
+     * title            — <title> override
+     * page_id          — data attribute on <body> for page-specific JS
+     * breadcrumbs      — list of {label, href} dicts (set with {% set %})
+     * nav_active       — which sidebar link to highlight
+     * main_block       — the page content (inside <main class="main">)
+     * aside_block      — the right-side panel (chat for case.html; empty
+                         for dashboard.html which puts the new-case modal
+                         in its own block)
+   ----------------------------------------------------------------- #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}VakilAI — Legal Research Workspace{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body data-page="{% block page_id %}base{% endblock %}">
+
+  <!-- Top Nav -->
+  <nav class="topnav">
+    <div class="breadcrumb">
+      <a href="{{ url_for('index') }}">VakilAI</a>
+      <span class="sep">/</span>
+      {% set bc = breadcrumbs | default([{'label': 'Dashboard'}]) %}
+      {% for item in bc %}
+        {% if not loop.last %}
+          {% if item.href %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}<span>{{ item.label }}</span>{% endif %}
+          <span class="sep">/</span>
+        {% else %}
+          <span class="here">{{ item.label }}</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <div class="nav-spacer"></div>
+    <div class="nav-right">
+      <button class="nav-icon" title="Search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      </button>
+      <button class="nav-icon" title="Notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 004 0"/></svg>
+      </button>
+      <div class="avatar" title="{{ user.name }}">{{ user.avatar_initials or 'AC' }}</div>
+    </div>
+  </nav>
+
+  <div class="app">
+
+    {# ========== SIDEBAR ========== #}
+    {% include "_sidebar.html" %}
+
+    {# ========== PAGE CONTENT ========== #}
+    {% block main_block %}{% endblock %}
+
+    <!-- ========== OPTIONAL RIGHT ASIDE ========== -->
+    {% block aside_block %}{% endblock %}
+
+  </div>
+
+  <!-- Server-side data exposed to JS modules. -->
+  <script>window.__USER__ = "{{ user }}";</script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

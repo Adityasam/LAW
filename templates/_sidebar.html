@@ -1,0 +1,74 @@
+{# -----------------------------------------------------------------
+   VakilAI — sidebar partial.
+   Imported by base.html via {% include "_sidebar.html" %}.
+   Reads these variables from the parent context:
+     * nav_active        (string) — which top-level link to highlight
+     * show_case_list    (bool)   — render the recent-cases block
+     * cases             (list)   — case rows for the list
+     * active_case_id    (int)    — which case row to mark active
+   ----------------------------------------------------------------- #}
+{% set active = nav_active | default('dashboard') %}
+<aside class="sidebar">
+  <div class="brand">
+    <a href="{{ url_for('index') }}"><h1>VakilAI</h1></a>
+    <div class="tag">Legal Research · v1.0</div>
+  </div>
+
+  <div class="nav-links">
+    <a class="nav-link {% if active == 'dashboard' %}active{% endif %}" href="{{ url_for('index') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </a>
+    <a class="nav-link {% if active == 'cases' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h18M3 12h18M3 17h12"/></svg>
+      Cases
+    </a>
+    <a class="nav-link {% if active == 'documents' %}active{% endif %}" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/></svg>
+      Documents
+    </a>
+    <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1A1.7 1.7 0 009 19.4a1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1A1.7 1.7 0 004.6 9a1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+      Settings
+    </a>
+  </div>
+
+  {% if show_case_list %}
+  <div class="case-section">
+    <div class="case-section-header">
+      <span class="label">Recent Cases</span>
+      <span class="count">{{ cases|length }}</span>
+    </div>
+    <div class="case-list" id="case-list">
+      {% for c in cases %}
+      <div class="case-item {% if c.id == active_case_id %}active{% endif %}"
+           data-id="{{ c.id }}"
+           data-id-display="{{ c.id_display or ('C-' ~ c.id) }}"
+           data-name="{{ c.name or c.title }}"
+           data-client="{{ c.client or c.client_name }}"
+           data-type="{{ c.type or c.case_type }}"
+           data-status="{{ c.status }}"
+           data-court="{{ c.court }}"
+           data-hearing="{{ c.next_hearing or c.hearing_date }}"
+           data-sections='{{ c.sections|tojson }}'
+           data-facts="{{ c.facts or '' }}"
+           data-lawyer="{{ c.assigned_lawyer or c.lawyer or '' }}"
+           data-documents='{{ c.documents|tojson }}'
+           data-notes='{{ c.notes|tojson }}'
+           onclick="window.location.href='/case/{{ c.id }}'">
+        <div class="cname">{{ c.name or c.title }}</div>
+        <div class="cmeta">
+          <span>{{ c.client or c.client_name }}</span>
+          <span class="dot"></span>
+          <span>{{ c.type or c.case_type }}</span>
+        </div>
+        <div class="crow">
+          <span class="ctype">{{ c.id_display or ('C-' ~ c.id) }}</span>
+          <span class="badge {{ c.status|lower }}">{{ c.status }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</aside>
