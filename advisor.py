@@ -3,9 +3,10 @@ import requests
 import json
 from google import genai
 from google.genai import types
+from config import Config
 
-client = genai.Client(api_key="AIzaSyDMNV7CW-JmuSf8EV3X9rR4-D0k04V3Mfo")
-KANOON_API_KEY = "570ff9983179b8b259f19cfbb7c9b32dc9ff44d4"
+client = genai.Client(api_key=Config.GEMINI_API_KEY)
+KANOON_API_KEY = Config.INDIAN_KANOON_API_KEY
 
 SYSTEM_PROMPT = """
 You are an expert Indian legal assistant with deep knowledge of BNS, BNSS, BSA, IPC, CrPC, and Indian case law.
@@ -62,6 +63,12 @@ You have deep expertise in:
 - Reading and exploiting weaknesses in prosecution cases
 
 You are currently assisting a junior lawyer who has shared a case with you.
+You have access to:
+1. Case facts
+2. Chat history
+3. Relevant snippets from case judgments
+4. Summaries of documents uploaded for this case (FIR, charge sheets, etc.)
+
 You must respond exactly as a senior advocate would brief a junior — specific, 
 tactical, no fluff.
 
@@ -204,9 +211,9 @@ def get_legal_advice(case_description: str, extracted: dict) -> dict:
         "judgments": judgments      # Return these so UI can show clickable links
     }
 
-def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: list[dict] = None, case_facts: str = None):
+def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: list[dict] = None, case_facts: str = None, doc_summaries: list[dict] = None):
     """
-    Streams a response from Gemini using RAG chunks, chat history, and case facts.
+    Streams a response from Gemini using RAG chunks, chat history, case facts, and doc summaries.
     """
     context_parts = []
     for i, item in enumerate(relevant_chunks):
@@ -216,19 +223,28 @@ def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: l
     
     context = "\n\n".join(context_parts)
     
+    # 2. Format Document Summaries
+    doc_context = ""
+    if doc_summaries:
+        doc_context = "UPLOADED DOCUMENT SUMMARIES:\n"
+        for i, d in enumerate(doc_summaries):
+            doc_context += f"Document {i+1} ({d.get('name')}): {d.get('summary')}\n"
+        doc_context += "\n"
+
+    # 3. Build Contents (History + Current Prompt)
     contents = []
     if history:
         for msg in history:
             role = "user" if msg["role"] == "lawyer" else "model"
             contents.append(types.Content(role=role, parts=[types.Part(text=msg["content"])]))
             
-    # Add current prompt with context and case facts
+    # Add current prompt with context, facts and doc summaries
     facts_context = f"CURRENT CASE FACTS:\n{case_facts}\n\n" if case_facts else ""
-    full_prompt = f"{facts_context}CONTEXT FROM JUDGMENTS:\n{context}\n\nUSER QUESTION: {user_message}"
+    full_prompt = f"{facts_context}{doc_context}CONTEXT FROM JUDGMENTS:\n{context}\n\nUSER QUESTION: {user_message}"
     contents.append(types.Content(role="user", parts=[types.Part(text=full_prompt)]))
 
     response = client.models.generate_content_stream(
-        model="models/gemini-3.1-flash-lite-preview",
+        model=Config.GEMINI_MODEL_NAME,
         contents=contents,
         config=types.GenerateContentConfig(
             system_instruction=RAG_SYSTEM_PROMPT,

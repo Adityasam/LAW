@@ -64,27 +64,27 @@
       if(chatForm) chatForm.style.display = 'none';
     }
 
-    $('#bc-case').textContent = d.name;
-    $('#case-id').textContent     = `${d.idDisplay} · ${(d.type || '').toUpperCase()}`;
-    $('#case-title').textContent  = d.name;
-    $('#case-court').textContent  = d.court || '—';
-    $('#case-hearing').textContent= fmtDate(d.hearing);
-    $('#case-sections-head').innerHTML = `Sections: <b>${(d.sections || []).join(', ') || '—'}</b>`;
+    if($('#bc-case')) $('#bc-case').textContent = d.name;
+    if($('#case-id')) $('#case-id').textContent     = `${d.idDisplay} · ${(d.type || '').toUpperCase()}`;
+    if($('#case-title')) $('#case-title').textContent  = d.name;
+    if($('#case-court')) $('#case-court').textContent  = d.court || '—';
+    if($('#case-hearing')) $('#case-hearing').textContent= fmtDate(d.hearing);
+    if($('#case-sections-head')) $('#case-sections-head').innerHTML = `Sections: <b>${(d.sections || []).join(', ') || '—'}</b>`;
 
-    $('#case-facts').textContent = d.facts || '';
-    $('#lawyer-name').textContent     = d.lawyer || '—';
-    $('#lawyer-chamber').textContent  = (d.lawyer && user && d.lawyer === user.name)
+    if($('#case-facts')) $('#case-facts').textContent = d.facts || '';
+    if($('#lawyer-name')) $('#lawyer-name').textContent     = d.lawyer || '—';
+    if($('#lawyer-chamber')) $('#lawyer-chamber').textContent  = (d.lawyer && user && d.lawyer === user.name)
       ? (user.chamber || 'Senior Counsel')
       : 'Senior Counsel';
-    $('#lawyer-initials').textContent = initialsOf(d.lawyer);
+    if($('#lawyer-initials')) $('#lawyer-initials').textContent = initialsOf(d.lawyer);
 
     // Section chips
-    $('#case-sections').innerHTML = (d.sections || [])
+    if($('#case-sections')) $('#case-sections').innerHTML = (d.sections || [])
       .map(s => `<span class="chip">${escapeHTML(s)}</span>`).join('');
 
     // Documents
     if(docList){
-      $('#doc-count').textContent = `${d.documents.length} file${d.documents.length===1?'':'s'}`;
+      if($('#doc-count')) $('#doc-count').textContent = `${d.documents.length} file${d.documents.length===1?'':'s'}`;
       docList.innerHTML = (d.documents || []).map(doc => `
       <div class="doc-item">
         <div class="doc-icon">
@@ -102,33 +102,35 @@
 
     // Notes
     const noteGrid = $('#note-grid');
-    noteGrid.innerHTML = (d.notes || []).map(n => {
-      if(n.type === 'voice' || n.note_type === 'voice'){
-        const bars = Array.from({length:56}, (_,i)=>{
-          const h = 6 + Math.abs(Math.sin(i*0.6 + (n.title||'').length)) * 16;
-          return `<span style="height:${h.toFixed(1)}px"></span>`;
-        }).join('');
+    if(noteGrid){
+      noteGrid.innerHTML = (d.notes || []).map(n => {
+        if(n.type === 'voice' || n.note_type === 'voice'){
+          const bars = Array.from({length:56}, (_,i)=>{
+            const h = 6 + Math.abs(Math.sin(i*0.6 + (n.title||'').length)) * 16;
+            return `<span style="height:${h.toFixed(1)}px"></span>`;
+          }).join('');
+          return `
+            <div class="voice-note">
+              <button class="play" title="Play">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7V5z"/></svg>
+              </button>
+              <div class="vinfo">
+                <div class="ttl">${escapeHTML(n.title)}</div>
+                <div class="waveform">${bars}</div>
+              </div>
+              <div class="vdur">${escapeHTML(n.duration || '00:00')}</div>
+            </div>`;
+        }
         return `
-          <div class="voice-note">
-            <button class="play" title="Play">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7V5z"/></svg>
-            </button>
-            <div class="vinfo">
-              <div class="ttl">${escapeHTML(n.title)}</div>
-              <div class="waveform">${bars}</div>
+          <div class="note">
+            <div class="nt">
+              <span class="ttl">${escapeHTML(n.title || 'Note')}</span>
+              <span class="tag">Note</span>
             </div>
-            <div class="vdur">${escapeHTML(n.duration || '00:00')}</div>
+            <p>${escapeHTML(n.content)}</p>
           </div>`;
-      }
-      return `
-        <div class="note">
-          <div class="nt">
-            <span class="ttl">${escapeHTML(n.title || 'Note')}</span>
-            <span class="tag">Note</span>
-          </div>
-          <p>${escapeHTML(n.content)}</p>
-        </div>`;
-    }).join('') || '<p style="color:var(--muted);font-size:12.5px;">No notes for this case.</p>';
+      }).join('') || '<p style="color:var(--muted);font-size:12.5px;">No notes for this case.</p>';
+    }
   }
 
   // ---------- Tabs ---------- //

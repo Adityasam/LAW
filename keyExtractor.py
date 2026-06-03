@@ -2,8 +2,9 @@ import os
 import json
 from google import genai
 from google.genai import types
+from config import Config
 
-client = genai.Client(api_key="AIzaSyDMNV7CW-JmuSf8EV3X9rR4-D0k04V3Mfo")
+client = genai.Client(api_key=Config.GEMINI_API_KEY)
 
 # ── System Prompt ──────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ def extract_case_entities(case_description: str) -> dict:
     """
 
     response = client.models.generate_content(
-        model="models/gemini-3.1-flash-lite-preview",
+        model=Config.GEMINI_MODEL_NAME,
         contents=case_description,
         config=types.GenerateContentConfig(
             system_instruction=EXTRACTION_SYSTEM_PROMPT,
