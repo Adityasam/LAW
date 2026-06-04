@@ -41,12 +41,25 @@ def vector_db_exists(case_id):
     """Checks if vector data exists for a case."""
     return _get_storage_path(case_id).exists()
 
-def create_vector_db(case_id, judgments_data):
+def create_vector_db(case_id, judgments_data, case_facts=None):
     """
-    Cleans and chunks judgments. Stores in data/vectors/case_<id>.json.
-    Each chunk is stored as a dict with 'text' and 'metadata'.
+    Creates persistent JSON storage of chunks from judgments and case facts.
     """
     all_data = []
+    
+    # 1. Index case facts first
+    if case_facts:
+        fact_chunks = chunk_text(case_facts)
+        for chunk in fact_chunks:
+            all_data.append({
+                "text": chunk,
+                "metadata": {
+                    "title": "Initial Case Facts",
+                    "type": "case_facts"
+                }
+            })
+
+    # 2. Index judgments
     for j in judgments_data:
         raw_html = j.get("doc_html", "")
         text = clean_html(raw_html)

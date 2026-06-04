@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% set breadcrumbs = [{ "label": "Cases" }] %}
+{% set nav_active  = "cases" %}
+
+{% block title %}Cases · LegalMind{% endblock %}
+{% block page_id %}cases{% endblock %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cases.css') }}">
+{% endblock %}
+
+{% block main_block %}
+<main class="cases-page">
+  <header class="cases-header">
+    <div class="lhs">
+      <div class="eyebrow">Case Management</div>
+      <h2>Active Matters</h2>
+      <div class="sub">
+        View and manage all your ongoing legal matters. 
+        Click on a case to open its dedicated workspace.
+      </div>
+    </div>
+    <div class="rhs-actions">
+      <div class="search-input">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="case-search" placeholder="Search by title, client or court...">
+      </div>
+      <button class="btn btn-primary" id="open-new-case">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+        New Case
+      </button>
+    </div>
+  </header>
+
+  <div class="cases-body">
+    {# ----- Stats Summary ----- #}
+    <div class="cases-stats">
+      <div class="stat-card">
+        <div class="label">Total Cases</div>
+        <div class="val">{{ stats.total }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Active</div>
+        <div class="val">{{ stats.active }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Upcoming Hearings</div>
+        <div class="val">{{ stats.hearing }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Closed</div>
+        <div class="val">{{ stats.closed }}</div>
+      </div>
+    </div>
+
+    {% if cases and cases|length > 0 %}
+      <div class="case-grid" id="case-grid">
+        {% for c in cases %}
+        <div class="case-card" onclick="window.location.href='/case/{{ c.id }}'" data-search="{{ (c.title ~ ' ' ~ c.client_name ~ ' ' ~ c.court)|lower }}">
+          <div class="card-head">
+            <div class="cid">{{ c.id_display }}</div>
+            <span class="badge {{ c.status|lower }}">{{ c.status }}</span>
+          </div>
+          <h3 class="ctitle">{{ c.title }}</h3>
+          <div class="cmeta">
+            <div class="m-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>{{ c.client_name }}</span>
+            </div>
+            <div class="m-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 7v1a3 3 0 006 0V7m0 1a3 3 0 006 0V7m0 1a3 3 0 006 0V7M4 21V10m5 11V10m5 11V10m5 11V10"/></svg>
+              <span>{{ c.court or 'N/A' }}</span>
+            </div>
+            <div class="m-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              <span>{{ c.hearing_date or 'No hearing set' }}</span>
+            </div>
+          </div>
+          <div class="card-footer">
+            <div class="tags">
+              <span class="type-tag">{{ c.case_type }}</span>
+              {% for s in (c.sections or [])[:2] %}
+                <span class="section-tag">{{ s }}</span>
+              {% endfor %}
+            </div>
+            <div class="doc-count">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/></svg>
+              {{ (c.documents or [])|length }}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h18M3 12h18M3 17h12"/></svg>
+        </div>
+        <h3>No cases yet</h3>
+        <p>Go to the dashboard to create your first case and start using LegalMind.</p>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Go to Dashboard</a>
+      </div>
+    {% endif %}
+  </div>
+</main>
+
+{% include "_new_case_modal.html" %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/new_case.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const search = document.getElementById('case-search');
+    const cards = document.querySelectorAll('.case-card');
+    
+    if (search) {
+      search.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase();
+        cards.forEach(card => {
+          const content = card.dataset.search;
+          card.style.display = content.includes(term) ? 'flex' : 'none';
+        });
+      });
+    }
+  });
+</script>
+{% endblock %}

@@ -1,5 +1,5 @@
 {# -----------------------------------------------------------------
-   VakilAI — shared HTML skeleton.
+   LegalMind — shared HTML skeleton.
    Every page extends this and fills in:
      * title            — <title> override
      * page_id          — data attribute on <body> for page-specific JS
@@ -15,10 +15,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{% block title %}VakilAI — Legal Research Workspace{% endblock %}</title>
+  <title>{% block title %}LegalMind — Legal Research Workspace{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/legalmind.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
   {% block extra_css %}{% endblock %}
 </head>
@@ -26,8 +27,13 @@
 
   <!-- Top Nav -->
   <nav class="topnav">
+    <div class="nav-logo">
+      <a href="{{ url_for('index') }}">
+        <img src="{{ url_for('static', filename='img/legalmind.png') }}" alt="LegalMind" height="24">
+      </a>
+    </div>
     <div class="breadcrumb">
-      <a href="{{ url_for('index') }}">VakilAI</a>
+      <a href="{{ url_for('index') }}">LegalMind</a>
       <span class="sep">/</span>
       {% set bc = breadcrumbs | default([{'label': 'Dashboard'}]) %}
       {% for item in bc %}

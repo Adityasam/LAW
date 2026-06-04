@@ -1,5 +1,5 @@
 {# -----------------------------------------------------------------
-   VakilAI — sidebar partial.
+   LegalMind — sidebar partial.
    Imported by base.html via {% include "_sidebar.html" %}.
    Reads these variables from the parent context:
      * nav_active        (string) — which top-level link to highlight
@@ -10,7 +10,10 @@
 {% set active = nav_active | default('dashboard') %}
 <aside class="sidebar">
   <div class="brand">
-    <a href="{{ url_for('index') }}"><h1>VakilAI</h1></a>
+    <a href="{{ url_for('index') }}" class="brand-link">
+      <img src="{{ url_for('static', filename='img/legalmind.png') }}" alt="LegalMind" class="brand-logo">
+      <h1>LegalMind</h1>
+    </a>
     <div class="tag">Legal Research · v1.0</div>
   </div>
 
@@ -19,11 +22,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
       Dashboard
     </a>
-    <a class="nav-link {% if active == 'cases' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+    <a class="nav-link {% if active == 'cases' %}active{% endif %}" href="{{ url_for('cases_page') }}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h18M3 12h18M3 17h12"/></svg>
       Cases
     </a>
-    <a class="nav-link {% if active == 'documents' %}active{% endif %}" href="#">
+    <a class="nav-link {% if active == 'documents' %}active{% endif %}" href="{{ url_for('documents_page') }}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/></svg>
       Documents
     </a>
@@ -52,6 +55,8 @@
            data-hearing="{{ c.next_hearing or c.hearing_date }}"
            data-sections='{{ c.sections|tojson }}'
            data-facts="{{ c.facts or '' }}"
+           data-ai_summary="{{ c.ai_summary or '' }}"
+           data-analysis_status="{{ c.analysis_status or 'pending' }}"
            data-lawyer="{{ c.assigned_lawyer or c.lawyer or '' }}"
            data-documents='{{ c.documents|tojson }}'
            data-notes='{{ c.notes|tojson }}'

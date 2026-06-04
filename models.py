@@ -1,6 +1,6 @@
 # models.py
 # ---------------------------------------------------------------------------
-# SQLAlchemy ORM models for VakilAI.
+# SQLAlchemy ORM models for LegalMind.
 # Relationships use lazy="select" (the default) so that related objects are
 # loaded on first access, which is the simplest and most predictable strategy
 # for a small Flask app.
@@ -59,6 +59,8 @@ class Case(db.Model):
     hearing_date = db.Column(db.Date)
     status       = db.Column(db.String(20), default="Active", nullable=False)  # Active / Hearing / Closed
     facts        = db.Column(db.Text)
+    ai_summary   = db.Column(db.Text, default="")                    # Gemini-generated summary of facts
+    analysis_status = db.Column(db.String(20), default="pending")      # pending, processing, completed, failed
     created_at   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     documents = db.relationship(
@@ -69,6 +71,9 @@ class Case(db.Model):
     )
     messages = db.relationship(
         "ChatMessage", backref="case", lazy="select", cascade="all, delete-orphan"
+    )
+    judgments = db.relationship(
+        "Judgment", backref="case", lazy="select", cascade="all, delete-orphan"
     )
 
     def to_dict(self, include_relations: bool = False) -> dict:
@@ -83,11 +88,14 @@ class Case(db.Model):
             "hearing_date": self.hearing_date.isoformat() if self.hearing_date else None,
             "status": self.status,
             "facts": self.facts,
+            "ai_summary": self.ai_summary,
+            "analysis_status": self.analysis_status,
             "created_at": self.created_at.isoformat(),
         }
         if include_relations:
             data["documents"] = [d.to_dict() for d in self.documents]
             data["notes"]     = [n.to_dict() for n in self.notes]
+            data["judgments"] = [j.to_dict() for j in self.judgments]
         return data
 
 
@@ -104,6 +112,7 @@ class Document(db.Model):
     file_size      = db.Column(db.Integer, default=0)                   # bytes
     extracted_text = db.Column(db.Text, default="")                    # OCR / pdfplumber output
     summary        = db.Column(db.Text, default="")                    # Gemini-generated summary
+    status         = db.Column(db.String(20), default="completed")     # processing, completed, failed
     uploaded_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     def to_dict(self) -> dict:
@@ -115,6 +124,7 @@ class Document(db.Model):
             "file_type": self.file_type,
             "file_size": self.file_size,
             "summary": self.summary,
+            "status": self.status,
             "uploaded_at": self.uploaded_at.isoformat(),
         }
 
@@ -175,4 +185,34 @@ class ChatMessage(db.Model):
             "citations": citations,
             "sections": sections,
             "created_at": self.created_at.isoformat(),
+        }
+
+
+class Judgment(db.Model):
+    """A relevant judgment/case-law fetched for a case."""
+
+    __tablename__ = "judgments"
+
+    id         = db.Column(db.Integer, primary_key=True)
+    case_id    = db.Column(db.Integer, db.ForeignKey("cases.id"), nullable=False, index=True)
+    title      = db.Column(db.String(500), nullable=False)
+    court      = db.Column(db.String(200))
+    date       = db.Column(db.String(50))
+    url        = db.Column(db.String(500))
+    doc_id     = db.Column(db.String(100))
+    summary    = db.Column(db.Text)      # ~300 word summary
+    full_html  = db.Column(db.Text)      # Full judgment content
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "case_id": self.case_id,
+            "title": self.title,
+            "court": self.court,
+            "date": self.date,
+            "url": self.url,
+            "doc_id": self.doc_id,
+            "summary": self.summary,
+            "uploaded_at": self.created_at.isoformat(),
         }

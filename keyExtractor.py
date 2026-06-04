@@ -48,7 +48,8 @@ no markdown, no backticks:
     "No premeditation — incident was spontaneous"
   ],
   "court_level": "Sessions Court / High Court / Supreme Court / District Court",
-  "urgency": "Bail / Regular Hearing / Appeal / Anticipatory Bail / FIR Quash"
+  "urgency": "Bail / Regular Hearing / Appeal / Anticipatory Bail / FIR Quash",
+  "ai_summary": "A concise Markdown-formatted summary (under 500 words) of the case facts. Use bold headers (e.g., **Key Parties**, **Incident Details**, **Legal Sections**, **Location & Dates**) and bulleted lists to organize the information clearly. It must capture all key details as if briefing a senior advocate."
 }
 
 Rules:
@@ -57,6 +58,7 @@ Rules:
 - Map old IPC sections to BNS equivalents wherever possible
 - key_facts should be crisp bullet-style facts, not full sentences
 - suggested_arguments should be legally sound, not generic
+- ai_summary must be in Markdown format using bold headers and lists for readability, and strictly under 500 words.
 - Return ONLY the JSON. Nothing else.
 """
 

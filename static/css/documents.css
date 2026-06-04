@@ -1,0 +1,239 @@
+.documents-page {
+  padding: 40px;
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.docs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 40px;
+}
+
+.docs-header h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 32px;
+  margin: 8px 0 12px;
+  color: var(--text);
+}
+
+.docs-header .sub {
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 500px;
+  line-height: 1.5;
+}
+
+.search-wrap {
+  width: 320px;
+}
+
+.search-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input svg {
+  position: absolute;
+  left: 12px;
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.search-input input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px 10px 40px;
+  color: var(--text);
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201, 162, 88, 0.1);
+}
+
+/* Table styles */
+.doc-table {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.doc-table-head {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 0.8fr 1fr 1fr 0.8fr;
+  padding: 14px 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.doc-row {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 0.8fr 1fr 1fr 0.8fr;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.doc-row:last-child {
+  border-bottom: none;
+}
+
+.doc-row:hover {
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.doc-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.doc-name .ic {
+  width: 36px;
+  height: 36px;
+  background: rgba(201, 162, 88, 0.1);
+  color: var(--gold);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.doc-name .ic svg {
+  width: 20px;
+  height: 20px;
+}
+
+.doc-name .n {
+  font-weight: 500;
+  color: var(--text);
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.doc-name .size {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.doc-case a {
+  color: var(--gold);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.doc-case a:hover {
+  text-decoration: underline;
+}
+
+.doc-case .cid {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.doc-type {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.doc-date {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.doc-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(201, 162, 88, 0.05);
+}
+
+.btn-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Modal styles */
+.summary-content {
+  line-height: 1.6;
+  color: var(--text-2);
+  font-size: 15px;
+  white-space: pre-wrap;
+}
+
+/* Empty state */
+.empty {
+  padding: 80px 0;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.empty .ic {
+  width: 64px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+  color: var(--muted);
+}
+
+.empty .ic svg {
+  width: 32px;
+  height: 32px;
+}
+
+.empty h3 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.empty p {
+  color: var(--muted);
+  max-width: 400px;
+  margin: 0 auto 24px;
+}

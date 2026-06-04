@@ -1,4 +1,4 @@
-# VakilAI — Legal Research Workspace
+# LegalMind — Legal Research Workspace
 
 AI-powered workspace for Indian lawyers. Manage cases, analyze facts, and research judgments with RAG-based assistance.
 
@@ -35,11 +35,11 @@ pip install -r requirements.txt
 ```
 
 ### 3. Configuration
-Create a `config.py` (or update existing) with your Gemini API key:
-```python
-class Config:
-    GEMINI_API_KEY = "your-api-key-here"
-    # ... other settings
+Create a `.env` file with your Gemini API key:
+```bash
+GEMINI_API_KEY=your-api-key-here
+INDIAN_KANOON_API_KEY=your-kanoon-key-here
+GEMINI_MODEL_NAME=models/gemini-3.1-flash-lite-preview
 ```
 
 ### 4. Run Application

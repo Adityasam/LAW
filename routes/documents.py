@@ -5,9 +5,10 @@
 # ---------------------------------------------------------------------------
 import os
 import uuid
+import threading
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, send_from_directory
 from werkzeug.utils import secure_filename
 
 from models import Document, db
@@ -22,6 +23,45 @@ def _allowed(filename: str) -> bool:
         return False
     ext = filename.rsplit(".", 1)[1].lower()
     return ext in current_app.config.get("ALLOWED_EXTENSIONS", set())
+
+
+def process_document_background(app_instance, doc_id, file_path, original_name):
+    """Background task to process document via Gemini and update DB/Vector DB."""
+    with app_instance.app_context():
+        try:
+            # 1. Gemini processing
+            extracted_text, summary = process_document(file_path)
+            
+            # 2. Update DB
+            doc = db.session.query(Document).get(doc_id)
+            if doc:
+                doc.extracted_text = extracted_text
+                doc.summary = summary
+                doc.status = "completed"
+                db.session.commit()
+
+                # 3. Add to vector DB
+                if extracted_text:
+                    add_to_vector_db(
+                        doc.case_id, 
+                        extracted_text, 
+                        {
+                            "title": f"Document: {original_name}",
+                            "type": "uploaded_document",
+                            "filename": doc.filename,
+                            "original_name": original_name
+                        }
+                    )
+        except Exception as e:
+            app_instance.logger.error("Background processing error for doc %s: %s", doc_id, e)
+            try:
+                doc = db.session.query(Document).get(doc_id)
+                if doc:
+                    doc.status = "failed"
+                    doc.summary = "AI extraction failed."
+                    db.session.commit()
+            except:
+                pass
 
 
 @documents_bp.post("/cases/<int:case_id>/documents")
@@ -59,47 +99,41 @@ def upload_document(case_id: int):
 
     size = target.stat().st_size
 
-    # 1. Process document with Gemini (OCR + Summary)
-    try:
-        extracted_text, summary = process_document(str(target))
-    except Exception as e:
-        print(f"Error processing document {original}: {e}")
-        extracted_text = ""
-        summary = "Error processing document summary."
-
-    # 2. Save to database
+    # 1. Create document record immediately (status: processing)
     doc = Document(
         case_id        = case_id,
         filename       = stored,
         original_name  = original,
         file_type      = ext,
         file_size      = size,
-        extracted_text = extracted_text,
-        summary        = summary,
+        extracted_text = "",
+        summary        = "",
+        status         = "processing"
     )
     db.session.add(doc)
     db.session.commit()
 
-    # 3. Add to vector DB for RAG
-    if extracted_text:
-        add_to_vector_db(
-            case_id, 
-            extracted_text, 
-            {
-                "title": f"Document: {original}",
-                "type": "uploaded_document",
-                "filename": stored,
-                "original_name": original
-            }
-        )
+    # 2. Trigger background processing
+    app_instance = current_app._get_current_object()
+    thread = threading.Thread(
+        target=process_document_background, 
+        args=(app_instance, doc.id, str(target), original)
+    )
+    thread.start()
 
-    # Return the full list of documents for this case to keep UI in sync
+    # Return immediately to the user
     docs = Document.query.filter_by(case_id=case_id).all()
     return jsonify({
         "ok": True, 
         "document": doc.to_dict(),
         "documents": [d.to_dict() for d in docs]
     }), 201
+
+
+@documents_bp.get("/uploads/<filename>")
+def serve_upload(filename: str):
+    """GET /uploads/<filename> — serves the actual file from disk."""
+    return send_from_directory(current_app.config["UPLOAD_FOLDER"], filename)
 
 
 @documents_bp.delete("/documents/<int:doc_id>")

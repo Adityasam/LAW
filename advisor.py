@@ -67,7 +67,9 @@ You have access to:
 1. Case facts
 2. Chat history
 3. Relevant snippets from case judgments
-4. Summaries of documents uploaded for this case (FIR, charge sheets, etc.)
+4. Detailed summaries of uploaded documents (FIR, Evidence, etc.)
+
+You must incorporate specific details from the document summaries into your reasoning. If a document summary mentions a specific witness, date, or piece of evidence, use that to strengthen your advice.
 
 You must respond exactly as a senior advocate would brief a junior — specific, 
 tactical, no fluff.
@@ -211,9 +213,9 @@ def get_legal_advice(case_description: str, extracted: dict) -> dict:
         "judgments": judgments      # Return these so UI can show clickable links
     }
 
-def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: list[dict] = None, case_facts: str = None, doc_summaries: list[dict] = None):
+def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: list[dict] = None, case_facts: str = None, doc_summaries: list[dict] = None, judgment_summaries: list[dict] = None):
     """
-    Streams a response from Gemini using RAG chunks, chat history, case facts, and doc summaries.
+    Streams a response from Gemini using RAG chunks, chat history, case facts, doc summaries, and judgment summaries.
     """
     context_parts = []
     for i, item in enumerate(relevant_chunks):
@@ -231,16 +233,28 @@ def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: l
             doc_context += f"Document {i+1} ({d.get('name')}): {d.get('summary')}\n"
         doc_context += "\n"
 
-    # 3. Build Contents (History + Current Prompt)
+    # 3. Format Judgment Summaries
+    judgment_context = ""
+    if judgment_summaries:
+        judgment_context = "RELATED JUDGMENT SUMMARIES:\n"
+        for i, j in enumerate(judgment_summaries):
+            judgment_context += f"Judgment {i+1} ({j.get('title')}): {j.get('summary')}\n"
+        judgment_context += "\n"
+
+    # 4. Build Contents (History + Current Prompt)
     contents = []
     if history:
         for msg in history:
             role = "user" if msg["role"] == "lawyer" else "model"
             contents.append(types.Content(role=role, parts=[types.Part(text=msg["content"])]))
             
-    # Add current prompt with context, facts and doc summaries
-    facts_context = f"CURRENT CASE FACTS:\n{case_facts}\n\n" if case_facts else ""
-    full_prompt = f"{facts_context}{doc_context}CONTEXT FROM JUDGMENTS:\n{context}\n\nUSER QUESTION: {user_message}"
+    # Add current prompt with context, facts and summaries
+    facts_context = f"AI CASE BRIEF (SUMMARY OF FACTS):\n{case_facts}\n\n" if case_facts else ""
+    
+    # Instruction to prioritize document summaries
+    instructions = "\nIMPORTANT: Heavily rely on the UPLOADED DOCUMENT SUMMARIES below for specific case details (FIR contents, charge sheet points, etc.). Incorporate these into your advice.\n\n"
+    
+    full_prompt = f"{facts_context}{doc_context}{judgment_context}{instructions}DETAILED SNIPPETS FROM JUDGMENTS:\n{context}\n\nUSER QUESTION: {user_message}"
     contents.append(types.Content(role="user", parts=[types.Part(text=full_prompt)]))
 
     response = client.models.generate_content_stream(

@@ -43,8 +43,10 @@
       court:     el.dataset.court,
       hearing:   el.dataset.hearing,
       sections:     parseJson(el.dataset.sections),
-      facts:        el.dataset.facts,
-      lawyer:       el.dataset.lawyer,
+      facts:        el.getAttribute('data-facts'),
+      ai_summary:   el.getAttribute('data-ai_summary'),
+      analysis_status: el.getAttribute('data-analysis_status') || 'pending',
+      lawyer:       el.getAttribute('data-lawyer'),
       documents:    parseJson(el.dataset.documents),
       notes:        parseJson(el.dataset.notes)
     };
@@ -59,9 +61,7 @@
     if($('#ai-dialog-overlay').classList.contains('active')){
       loadChatHistory(d.id);
     } else {
-      // Just reset the button states
-      if(analyzeWrap) analyzeWrap.style.display = 'flex';
-      if(chatForm) chatForm.style.display = 'none';
+      updateChatUI();
     }
 
     if($('#bc-case')) $('#bc-case').textContent = d.name;
@@ -70,6 +70,15 @@
     if($('#case-court')) $('#case-court').textContent  = d.court || '—';
     if($('#case-hearing')) $('#case-hearing').textContent= fmtDate(d.hearing);
     if($('#case-sections-head')) $('#case-sections-head').innerHTML = `Sections: <b>${(d.sections || []).join(', ') || '—'}</b>`;
+
+    if($('#case-ai-summary')){
+      if(d.ai_summary){
+        $('#case-ai-summary').innerHTML = marked.parse(d.ai_summary);
+        $('#ai-summary-card').style.display = 'block';
+      } else {
+        $('#ai-summary-card').style.display = 'none';
+      }
+    }
 
     if($('#case-facts')) $('#case-facts').textContent = d.facts || '';
     if($('#lawyer-name')) $('#lawyer-name').textContent     = d.lawyer || '—';
@@ -92,11 +101,24 @@
         </div>
         <div class="doc-meta">
           <div class="n">${escapeHTML(doc.name || doc.original_name)}</div>
-          <div class="d">Uploaded ${fmtDate(doc.date || doc.uploaded_at)} · ${escapeHTML((doc.type || doc.file_type || '').toUpperCase())}</div>
+          <div class="d">
+            ${doc.status === 'processing' 
+              ? '<span style="color:var(--gold)">AI Extracting...</span>' 
+              : `Uploaded ${fmtDate(doc.date || doc.uploaded_at)} · ${escapeHTML((doc.type || doc.file_type || '').toUpperCase())}`}
+          </div>
         </div>
-        <button class="doc-del" title="Delete" data-id="${doc.id}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
-        </button>
+        <div class="doc-actions">
+          ${doc.summary ? `
+          <button class="btn-icon view-doc-summary" title="View Summary" data-summary="${escapeHTML(doc.summary)}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a4 4 0 00-4-4H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a4 4 0 014-4h6z"/></svg>
+          </button>` : ''}
+          <a href="/uploads/${doc.filename}" target="_blank" class="btn-icon" title="Download">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </a>
+          <button class="doc-del" title="Delete" data-id="${doc.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+          </button>
+        </div>
       </div>`).join('') || '<p style="color:var(--muted);font-size:12.5px;">No documents yet.</p>';
     }
 
@@ -131,6 +153,47 @@
           </div>`;
       }).join('') || '<p style="color:var(--muted);font-size:12.5px;">No notes for this case.</p>';
     }
+
+    // Start polling if there are processing documents or AI summary is missing
+    if(d.documents.some(doc => doc.status === 'processing') || (d.facts && !d.ai_summary)){
+      startPolling(d.id);
+    }
+  }
+
+  let pollInterval = null;
+  function startPolling(caseId){
+    if(pollInterval) return;
+    pollInterval = setInterval(() => {
+      fetch(`/cases/${caseId}`)
+        .then(res => res.json())
+        .then(res => {
+          if(res.ok && res.case){
+            const activeItem = $('.case-item.active');
+            if(activeItem && parseInt(activeItem.dataset.id) === caseId){
+              activeItem.setAttribute('data-documents', JSON.stringify(res.case.documents || []));
+              // Update other fields as well for the UI to refresh summary
+              activeItem.setAttribute('data-ai_summary', res.case.ai_summary || '');
+              activeItem.setAttribute('data-analysis_status', res.case.analysis_status || 'pending');
+              activeItem.setAttribute('data-sections', JSON.stringify(res.case.sections || []));
+              
+              renderCase(activeItem);
+              
+              // Stop polling if all done
+              const docsDone = !res.case.documents.some(doc => doc.status === 'processing');
+              const summaryDone = !!res.case.ai_summary;
+              
+              if(docsDone && summaryDone){
+                clearInterval(pollInterval);
+                pollInterval = null;
+              }
+            }
+          }
+        })
+        .catch(() => {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        });
+    }, 10000);
   }
 
   // ---------- Tabs ---------- //
@@ -211,38 +274,64 @@
   if(docList){
     docList.addEventListener('click', e => {
       const btn = e.target.closest('.doc-del');
-      if(!btn) return;
-      
-      const docId = btn.dataset.id;
-      if(!docId || docId === 'undefined') {
-        console.error('No document ID found on button');
+      if(btn){
+        const docId = btn.dataset.id;
+        if(!docId || docId === 'undefined') {
+          console.error('No document ID found on button');
+          return;
+        }
+        
+        if(!confirm('Are you sure you want to delete this document?')) return;
+
+        btn.disabled = true;
+        fetch(`/documents/${docId}`, { method: 'DELETE' })
+          .then(res => {
+            if (!res.ok) {
+              return res.json().then(data => { throw new Error(data.error || 'Delete failed'); });
+            }
+            return res.json();
+          })
+          .then(res => {
+            if(res.ok){
+              const activeItem = $('.case-item.active');
+              if(activeItem){
+                activeItem.dataset.documents = JSON.stringify(res.documents || []);
+                renderCase(activeItem);
+              }
+            }
+          })
+          .catch(err => {
+            console.error('Delete error:', err);
+            alert(err.message || 'Delete failed');
+            btn.disabled = false;
+          });
         return;
       }
-      
-      if(!confirm('Are you sure you want to delete this document?')) return;
 
-      btn.disabled = true;
-      fetch(`/documents/${docId}`, { method: 'DELETE' })
-        .then(res => {
-          if (!res.ok) {
-            return res.json().then(data => { throw new Error(data.error || 'Delete failed'); });
-          }
-          return res.json();
-        })
-        .then(res => {
-          if(res.ok){
-            const activeItem = $('.case-item.active');
-            if(activeItem){
-              activeItem.dataset.documents = JSON.stringify(res.documents || []);
-              renderCase(activeItem);
-            }
-          }
-        })
-        .catch(err => {
-          console.error('Delete error:', err);
-          alert(err.message || 'Delete failed');
-          btn.disabled = false;
-        });
+      // Summary button
+      const summaryBtn = e.target.closest('.view-doc-summary');
+      if(summaryBtn){
+        const summary = summaryBtn.dataset.summary;
+        const row = summaryBtn.closest('.doc-item');
+        const docName = row.querySelector('.doc-meta .n').textContent;
+        
+        const summaryModal = $('#summary-modal');
+        const summaryText = $('#summary-text');
+        const summaryDocName = $('#summary-doc-name');
+        
+        if(summaryModal && summaryText && summaryDocName){
+          summaryText.innerHTML = marked.parse(summary);
+          summaryDocName.textContent = docName;
+          summaryModal.classList.add('active');
+        }
+      }
+    });
+  }
+
+  const closeSummary = $('#close-summary');
+  if(closeSummary){
+    closeSummary.addEventListener('click', () => {
+      $('#summary-modal').classList.remove('active');
     });
   }
 
@@ -269,7 +358,7 @@
                 <span>${escapeHTML(j.court || 'Indian Kanoon')}</span>
                 <span>${escapeHTML(j.date || '')}</span>
               </div>
-              ${j.snippet ? `<div class="js">${j.snippet}</div>` : ''}
+              ${j.snippet ? `<div class="js">${marked.parse(j.snippet)}</div>` : ''}
             </div>`).join('')}
         </div>
       `;
@@ -304,35 +393,6 @@
   const chatStatusCenter = $('#chat-status-center');
   const aiTrigger = $('#ai-trigger');
 
-  function loadChatHistory(caseId){
-    if(!caseId) return;
-    
-    // Clear existing messages (except status center)
-    const msgs = chatBody.querySelectorAll('.msg');
-    msgs.forEach(m => m.remove());
-
-    fetch(`/cases/${caseId}/chat`)
-      .then(res => res.json())
-      .then(data => {
-        if(data.ok && data.messages){
-          data.messages.forEach(m => {
-            appendMessage({ role: m.role, content: m.content });
-          });
-          
-          // If we have messages, hide Analyze button and show chat input
-          if(data.messages.length > 0){
-            if(analyzeWrap) analyzeWrap.style.display = 'none';
-            if(chatForm) chatForm.style.display = 'flex';
-          } else {
-            // No messages — show Analyze button
-            if(analyzeWrap) analyzeWrap.style.display = 'flex';
-            if(chatForm) chatForm.style.display = 'none';
-          }
-        }
-      })
-      .catch(err => console.error('History load error:', err));
-  }
-
   function setStatus(text, showDots = false) {
     if(!chatStatusCenter) return;
     if(!text) {
@@ -346,6 +406,54 @@
       </div>
     `;
   }
+
+  function updateChatUI() {
+    const status = (data.active.analysis_status || 'pending').toLowerCase();
+    
+    if (status === 'completed') {
+      if (analyzeWrap) analyzeWrap.style.display = 'none';
+      if (chatForm) chatForm.style.display = 'flex';
+      setStatus(null);
+    } else if (status === 'processing') {
+      if (analyzeWrap) analyzeWrap.style.display = 'none';
+      if (chatForm) chatForm.style.display = 'none';
+      setStatus('LegalMind is analyzing your case...', true);
+    } else {
+      // pending or failed
+      if (analyzeWrap) analyzeWrap.style.display = 'flex';
+      if (chatForm) chatForm.style.display = 'none';
+      setStatus(null);
+    }
+  }
+
+  function loadChatHistory(caseId){
+     if(!caseId) return;
+     
+     // Clear existing messages (except status center)
+     const msgs = chatBody.querySelectorAll('.msg');
+     msgs.forEach(m => m.remove());
+
+     fetch(`/cases/${caseId}/chat`)
+       .then(res => res.json())
+       .then(data => {
+         if(data.ok){
+           if(data.messages){
+             data.messages.forEach(m => {
+               appendMessage({ role: m.role, content: m.content });
+             });
+           }
+           
+           // Use the status from the server to update UI
+           updateChatUI();
+           
+           if(data.analysis_status === 'processing'){
+             // Poll for status update if still processing
+             setTimeout(() => loadChatHistory(caseId), 5000);
+           }
+         }
+       })
+       .catch(err => console.error('History load error:', err));
+   }
 
   // ---------- Analyze Button Logic ---------- //
   if(analyzeBtn){
@@ -365,12 +473,13 @@
       })
       .then(response => response.json())
       .then(data => {
-          setStatus('Analysis Completed');
-
-          // Switch UI
-          if(analyzeWrap) analyzeWrap.style.display = 'none';
-          if(chatForm) chatForm.style.display = 'flex';
-          if(chatInput) chatInput.focus();
+          if(data.ok){
+            setStatus('AI Research started...', true);
+            // Start polling for completion
+            setTimeout(() => loadChatHistory(caseId), 3000);
+          } else {
+            throw new Error(data.error || 'Failed to start research');
+          }
       })
       .catch(error => {
           console.error('Extract API error:', error);
@@ -567,6 +676,9 @@
     if(active){
       active.classList.add('active');
       renderCase(active);
+    } else if (data.active) {
+      // Direct navigation logic
+      updateChatUI();
     }
 
     // Auto-scroll chat to the bottom on load.

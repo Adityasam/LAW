@@ -40,7 +40,7 @@ class IndianKanoon:
     def _headers(self) -> Dict[str, str]:
         return {
             "Accept": "application/json",
-            "User-Agent": f"VakilAI/0.1 (+kanoon-client)",
+            "User-Agent": f"LegalMind/0.1 (+kanoon-client)",
         }
 
     def _parse(self, resp: requests.Response) -> Dict[str, Any]:

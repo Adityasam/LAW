@@ -1,6 +1,6 @@
 # config.py
 # ---------------------------------------------------------------------------
-# Centralised configuration for the VakilAI Flask application.
+# Centralised configuration for the LegalMind Flask application.
 # Keep secrets out of source control in real deployments — use environment
 # variables (e.g. python-dotenv) and override values here.
 # ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ class Config:
     GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME", "models/gemini-3.1-flash-lite-preview")
 
     # --- App metadata ---
-    APP_NAME = "VakilAI"
+    APP_NAME = "LegalMind"
     APP_VERSION = "0.1.0"
     DEBUG = True
 

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% set breadcrumbs = [{ "label": "Documents" }] %}
+{% set nav_active  = "documents" %}
+
+{% block title %}Documents · LegalMind{% endblock %}
+{% block page_id %}documents{% endblock %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/documents.css') }}">
+{% endblock %}
+
+{% block main_block %}
+<main class="documents-page">
+  <header class="docs-header">
+    <div class="lhs">
+      <div class="eyebrow">Document Repository</div>
+      <h2>All Case Documents</h2>
+      <div class="sub">
+        Browse, search, and manage all documents across your cases. 
+        Each document is indexed and summarized by LegalMind.
+      </div>
+    </div>
+    <div class="search-wrap">
+      <div class="search-input">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="doc-search" placeholder="Search by filename, case or content...">
+      </div>
+    </div>
+  </header>
+
+  <div class="docs-body">
+    {% if documents and documents|length > 0 %}
+      <div class="doc-table">
+        <div class="doc-table-head">
+          <div>Document Name</div>
+          <div>Case</div>
+          <div>Type</div>
+          <div>Uploaded</div>
+          <div>Status</div>
+          <div></div>
+        </div>
+        <div class="doc-rows" id="doc-rows">
+          {% for doc in documents %}
+          <div class="doc-row" data-id="{{ doc.id }}">
+            <div class="doc-name">
+              <div class="ic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/></svg>
+              </div>
+              <div class="info">
+                <div class="n">{{ doc.original_name }}</div>
+                <div class="size">{{ (doc.file_size / 1024)|round(1) }} KB</div>
+              </div>
+            </div>
+            <div class="doc-case">
+              <a href="/case/{{ doc.case_id }}">{{ doc.case_name }}</a>
+              <div class="cid">{{ doc.case_id_display }}</div>
+            </div>
+            <div class="doc-type">{{ (doc.file_type or 'Unknown')|upper }}</div>
+            <div class="doc-date">{{ doc.uploaded_at[:10] }}</div>
+            <div class="doc-status">
+              <span class="badge {{ doc.status or 'completed' }}">{{ (doc.status or 'completed')|title }}</span>
+            </div>
+            <div class="doc-actions">
+              <button class="btn-icon view-summary" title="View Summary" data-summary="{{ doc.summary or 'No summary available.' }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a4 4 0 00-4-4H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a4 4 0 014-4h6z"/></svg>
+              </button>
+              <a href="{{ url_for('documents.serve_upload', filename=doc.filename) }}" target="_blank" class="btn-icon" title="Download">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              </a>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div class="empty">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
+        </div>
+        <h3>No documents found</h3>
+        <p>Start by creating a case and uploading documents like FIRs, charge sheets, or evidence.</p>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Go to Dashboard</a>
+      </div>
+    {% endif %}
+  </div>
+</main>
+
+{# ----- Summary Modal ----- #}
+<div class="modal-backdrop" id="summary-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h3>Document Summary</h3>
+        <div class="sub" id="summary-doc-name"></div>
+      </div>
+      <button class="modal-close" id="close-summary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M6 18L18 6"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="summary-content" id="summary-text"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="{{ url_for('static', filename='js/documents.js') }}"></script>
+{% endblock %}

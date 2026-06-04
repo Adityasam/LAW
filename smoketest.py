@@ -1,4 +1,4 @@
-"""End-to-end smoke test for the VakilAI backend. Run with `python smoketest.py`."""
+"""End-to-end smoke test for the LegalMind backend. Run with `python smoketest.py`."""
 import io
 import os
 import sys

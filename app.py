@@ -1,11 +1,11 @@
 # app.py
 # ---------------------------------------------------------------------------
-# VakilAI Flask application entry point.
+# LegalMind Flask application entry point.
 #
 #  * Bootstraps the Flask app with config from config.py
 #  * Initialises SQLAlchemy (db lives in models.py to avoid circular imports)
 #  * Registers the case / document / chat blueprints
-#  * Exposes a / route that renders the VakilAI workspace UI
+#  * Exposes a / route that renders the LegalMind workspace UI
 #  * Exposes a /seed route that wipes & repopulates the database with
 #    realistic Indian dummy data (2 lawyers, 3 cases, 4 documents, 2 notes
 #    per case)
@@ -148,6 +148,39 @@ def create_app(config_class: type[Config] = Config) -> Flask:
             quick_queries=[],
         )
 
+    @app.get("/documents")
+    def documents_page():
+        """Render the all-documents page."""
+        user = _current_user()
+        cases = _all_cases()
+        # Fetch all documents with their case information
+        docs = Document.query.order_by(Document.uploaded_at.desc()).all()
+        hydrated_docs = []
+        for d in docs:
+            item = d.to_dict()
+            item["case_name"] = d.case.title if d.case else "Unassigned"
+            item["case_id_display"] = f"CASE-{d.case.id:04d}" if d.case else "N/A"
+            hydrated_docs.append(item)
+            
+        return render_template(
+            "documents.html",
+            user=user,
+            cases=cases,
+            documents=hydrated_docs
+        )
+
+    @app.get("/cases")
+    def cases_page():
+        """Render the full case-list page."""
+        user = _current_user()
+        cases = _all_cases()
+        return render_template(
+            "cases.html",
+            user=user,
+            cases=cases,
+            stats=_case_stats(cases)
+        )
+
     @app.get("/health")
     def health():
         """Lightweight liveness probe — returns DB connectivity status."""
@@ -183,7 +216,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
 
     @app.post("/extract")
     def extract():
-        """Extract case entities, fetch judgments, and prepare persistent vector data."""
+        """Manual trigger for case analysis (research + summary)."""
         case_id = request.json.get("case_id")
         if not case_id:
             return {"error": "case_id is required"}, 400
@@ -192,49 +225,33 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         if not case:
             return {"error": "Case not found"}, 404
             
-        case_description = case.facts
-        if not case_description:
+        if not case.facts:
             return {"error": "No facts recorded for this case"}, 400
 
-        # 1. Extract entities
-        entities = extract_case_entities(case_description)
+        # Trigger background analysis
+        from routes.cases import process_case_background
+        import threading
         
-        print(entities)
-        # 2. Get judgments (advisor modified to only return judgments now)
-        data = get_legal_advice(case_description, entities)
-        judgments = data.get("judgments", [])[:3] # Take latest 3
-        
-        # 3. Check if vector data already exists
-        if not vector_db_exists(case_id):
-            # Fetch full HTML for these 3 judgments and clean/chunk
-            judgments_with_html = []
-            for j in judgments:
-                doc_id = j.get("doc_id")
-                if doc_id:
-                    try:
-                        full_doc = fetch_doc_by_id(doc_id)
-                        j["doc_html"] = full_doc.get("doc", "")
-                        judgments_with_html.append(j)
-                    except Exception as e:
-                        print(f"Failed to fetch doc {doc_id}: {e}")
-            
-            # 4. Create persistent vector data
-            create_vector_db(case_id, judgments_with_html)
-        else:
-            print(f"Vector data for case {case_id} already exists. Skipping chunking.")
+        app_instance = current_app._get_current_object()
+        thread = threading.Thread(
+            target=process_case_background, 
+            args=(app_instance, case.id, case.facts)
+        )
+        thread.start()
         
         return {
             "ok": True,
-            "judgments": judgments,
-            "message": "Analysis complete. System ready to chat."
+            "message": "Analysis started in background."
         }
 
     @app.get("/cases/<int:case_id>/chat")
     def get_chat_history(case_id):
         """Fetch chat history for a specific case."""
+        case = db.session.get(Case, case_id)
         msgs = ChatMessage.query.filter_by(case_id=case_id).order_by(ChatMessage.created_at.asc()).all()
         return {
             "ok": True,
+            "analysis_status": case.analysis_status if case else "pending",
             "messages": [m.to_dict() for m in msgs]
         }
 
@@ -252,21 +269,27 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         history = [{"role": m.role, "content": m.content} for m in history_msgs]
         
         case = Case.query.get(case_id)
-        case_facts = case.facts if case else ""
+        # Use AI summary for chat context if available, fallback to raw facts
+        case_context = (case.ai_summary if case and case.ai_summary else (case.facts if case else ""))
         
         # 2. Fetch document summaries
         doc_summaries = []
+        judgment_summaries = []
         if case:
             for doc in case.documents:
                 if doc.summary:
                     doc_summaries.append({"name": doc.original_name, "summary": doc.summary})
+            
+            for j in case.judgments:
+                if j.summary:
+                    judgment_summaries.append({"title": j.title, "summary": j.summary})
 
         # 3. Get RAG context
         relevant = get_relevant_chunks(case_id, user_msg)
         
         def generate():
             full_response = ""
-            for text in stream_legal_chat(user_msg, relevant, history, case_facts, doc_summaries):
+            for text in stream_legal_chat(user_msg, relevant, history, case_context, doc_summaries, judgment_summaries):
                 full_response += text
                 yield text
             

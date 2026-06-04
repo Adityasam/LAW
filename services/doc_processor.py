@@ -36,15 +36,19 @@ def process_document(file_path: str):
     prompt = """
     Analyze the attached document carefully.
     1. Extract all readable text from the document verbatim.
-    2. Provide a concise summary of the document (around 200 words). 
-       Focus on key parties, dates, allegations, and legal implications.
+    2. Provide a professional legal summary of the document (around 200-300 words). 
+       
+    Use Markdown formatting for the summary:
+    - Use bold headings for sections like **Nature of Document**, **Key Parties**, **Critical Dates**, **Core Allegations/Facts**, and **Legal Implications**.
+    - Use bullet points for lists.
+    - Ensure it is structured for easy reading in a legal workspace.
     
     Format your response exactly as:
     ---TEXT START---
     [Verbatim Text Here]
     ---TEXT END---
     ---SUMMARY START---
-    [200-word Summary Here]
+    [Markdown-formatted Summary Here]
     ---SUMMARY END---
     """
 

@@ -5,9 +5,13 @@
 # ---------------------------------------------------------------------------
 from datetime import datetime
 from typing import Optional
-from flask import Blueprint, jsonify, request
+import threading
+from flask import Blueprint, jsonify, request, current_app
 
-from models import Case, db
+from models import Case, db, Judgment
+from keyExtractor import extract_case_entities
+from chunker import create_vector_db, vector_db_exists
+from advisor import get_legal_advice, fetch_doc_by_id, client
 
 cases_bp = Blueprint("cases", __name__, url_prefix="/cases")
 
@@ -20,6 +24,104 @@ def _parse_date(s: Optional[str]):
         return datetime.fromisoformat(s.replace("Z", "+00:00")).date()
     except ValueError:
         return None
+
+
+def process_case_background(app_instance, case_id, facts):
+    """Background task to extract entities, generate summary and research judgments."""
+    with app_instance.app_context():
+        try:
+            # Update status to processing
+            case = db.session.query(Case).get(case_id)
+            if case:
+                case.analysis_status = "processing"
+                db.session.commit()
+
+            # 1. AI Analysis (Entities + Summary)
+            analysis = extract_case_entities(facts)
+            
+            # 2. Research Judgments (Indian Kanoon)
+            research_data = get_legal_advice(facts, analysis)
+            judgments_meta = research_data.get("judgments", [])[:3] # Take latest 3
+
+            # 3. Update Case record with summary and sections
+            case = db.session.query(Case).get(case_id)
+            if case:
+                if "ai_summary" in analysis:
+                    case.ai_summary = analysis["ai_summary"]
+                if not case.sections and analysis.get("sections"):
+                    sections_list = [s.get("code") for s in analysis["sections"] if s.get("code")]
+                    case.sections = ", ".join(sections_list)
+                db.session.commit()
+
+            # 4. Fetch Full HTML and Generate Summaries for Judgments
+            judgments_to_index = []
+            for jm in judgments_meta:
+                doc_id = jm.get("doc_id")
+                if not doc_id: continue
+                
+                try:
+                    # Fetch HTML
+                    full_doc = fetch_doc_by_id(doc_id)
+                    doc_html = full_doc.get("doc", "")
+                    
+                    # Generate short ~300 word summary for this judgment
+                    summary_prompt = f"""
+                    Summarize this legal judgment in about 300 words using professional legal Markdown. 
+                    Highlight the core dispute, key legal principles applied, and the final ruling.
+                    
+                    Use bold headings for sections like **Core Dispute**, **Key Legal Principles**, and **Final Ruling**.
+                    Use bullet points for lists.
+                    
+                    JUDGMENT TITLE: {jm.get('title')}
+                    CONTENT: {doc_html[:10000]} # Send first 10k chars for summary
+                    """
+                    sum_res = client.models.generate_content(
+                        model=current_app.config["GEMINI_MODEL_NAME"],
+                        contents=summary_prompt
+                    )
+                    j_summary = sum_res.text.strip()
+
+                    # Save to judgments table
+                    judgment = Judgment(
+                        case_id   = case_id,
+                        title     = jm.get("title"),
+                        court     = jm.get("court"),
+                        date      = jm.get("date"),
+                        url       = jm.get("url"),
+                        doc_id    = str(doc_id),
+                        summary   = j_summary,
+                        full_html = doc_html
+                    )
+                    db.session.add(judgment)
+                    
+                    # Prep for vector DB
+                    jm["doc_html"] = doc_html
+                    judgments_to_index.append(jm)
+                    
+                except Exception as e:
+                    app_instance.logger.error("Failed to process judgment %s: %s", doc_id, e)
+            
+            db.session.commit()
+
+            # 5. Create Vector DB (Case Facts + Judgment HTML)
+            if not vector_db_exists(case_id):
+                create_vector_db(case_id, judgments_to_index, facts)
+            
+            # Final status update
+            case = db.session.query(Case).get(case_id)
+            if case:
+                case.analysis_status = "completed"
+                db.session.commit()
+                
+        except Exception as e:
+            app_instance.logger.error("Background processing error for case %s: %s", case_id, e)
+            try:
+                case = db.session.query(Case).get(case_id)
+                if case:
+                    case.analysis_status = "failed"
+                    db.session.commit()
+            except:
+                pass
 
 
 @cases_bp.get("/")
@@ -70,6 +172,16 @@ def create_case():
     )
     db.session.add(case)
     db.session.commit()
+
+    # Trigger background analysis of facts
+    if case.facts:
+        app_instance = current_app._get_current_object()
+        thread = threading.Thread(
+            target=process_case_background, 
+            args=(app_instance, case.id, case.facts)
+        )
+        thread.start()
+
     return jsonify({"ok": True, "case": case.to_dict()}), 201
 
 

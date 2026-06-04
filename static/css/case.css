@@ -1,5 +1,5 @@
 /* -------------------------------------------------------------------------
-   Case details page — VakilAI
+   Case details page — LegalMind
    Three-column layout:  sidebar | main (case header + tabs) | chat panel
    ------------------------------------------------------------------------- */
 
@@ -207,14 +207,31 @@
   font-size:11.5px; color:var(--muted);
   margin-top:2px;
 }
+.doc-actions{
+  display:flex; align-items:center; gap:8px;
+}
 .doc-del{
   width:30px; height:30px; border-radius:6px;
   color:var(--muted);
   display:flex; align-items:center; justify-content:center;
   transition:background .2s, color .2s;
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
 .doc-del:hover{ background:rgba(122,41,41,0.15); color:#D07070; }
 .doc-del svg{ width:14px; height:14px; }
+.btn-icon{
+  width:30px; height:30px; border-radius:6px;
+  color:var(--muted);
+  display:flex; align-items:center; justify-content:center;
+  transition:background .2s, color .2s;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.btn-icon:hover{ background:var(--gold-soft); color:var(--gold); }
+.btn-icon svg{ width:14px; height:14px; }
 
 .upload-zone{
   margin-top:14px;
