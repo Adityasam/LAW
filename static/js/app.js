@@ -1,5 +1,5 @@
 /* -------------------------------------------------------------------------
-   VakilAI — shared front-end helpers.
+   LegalMind — shared front-end helpers.
    Loaded on every page; defines a small global API used by the page
    modules (dashboard.js, case.js).
    ------------------------------------------------------------------------- */

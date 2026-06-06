@@ -8,7 +8,7 @@
    the right-side chat is bound to the currently active case.
    ----------------------------------------------------------------- #}
 
-{% block title %}{{ active_case.name or active_case.title }} · VakilAI{% endblock %}
+{% block title %}{{ active_case.name or active_case.title }} · LegalMind{% endblock %}
 {% block page_id %}case{% endblock %}
 {% block extra_css %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/case.css') }}">
@@ -60,6 +60,19 @@
         <p id="case-facts">{{ active_case.facts or 'No facts recorded for this case yet.' }}</p>
       </div>
 
+      <div class="card" id="ai-summary-card" style="{% if not active_case.ai_summary %}display: none;{% endif %} border: 1px solid var(--gold-soft); background: rgba(201, 162, 88, 0.03);">
+        <div class="ch">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" style="width: 18px; height: 18px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <h3 style="color: var(--gold);">AI Case Brief</h3>
+          </div>
+          <span class="sub">Automated Intelligence Summary</span>
+        </div>
+        <div id="case-ai-summary" style="line-height: 1.6; font-size: 14.5px; color: var(--text-2);">
+          {{ active_case.ai_summary|safe }}
+        </div>
+      </div>
+
       <div class="card">
         <div class="ch">
           <h3>Sections Involved</h3>
@@ -69,24 +82,6 @@
           {% for s in active_case.sections or [] %}
             <span class="chip">{{ s }}</span>
           {% endfor %}
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="ch">
-          <h3>Assigned Counsel</h3>
-          <span class="sub">Lead</span>
-        </div>
-        <div class="lawyer">
-          <div class="av" id="lawyer-initials">
-            {{ (active_case.assigned_lawyer or active_case.lawyer or user.name)[:2]|upper }}
-          </div>
-          <div class="info">
-            <div class="n" id="lawyer-name">{{ active_case.assigned_lawyer or active_case.lawyer or user.name }}</div>
-            <div class="r" id="lawyer-chamber">
-              {{ user.chamber if user and active_case.assigned_lawyer == user.name else 'Senior Counsel' }}
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -108,9 +103,19 @@
               <div class="n">{{ d.name or d.original_name }}</div>
               <div class="d">Uploaded {{ d.date or d.uploaded_at }} · {{ (d.type or d.file_type or '')|upper }}</div>
             </div>
-            <button class="doc-del" title="Delete" data-id="{{ d.id }}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
-            </button>
+            <div class="doc-actions">
+              {% if d.summary %}
+              <button class="btn-icon view-doc-summary" title="View Summary" data-summary="{{ d.summary }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a4 4 0 00-4-4H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a4 4 0 014-4h6z"/></svg>
+              </button>
+              {% endif %}
+              <a href="{{ url_for('documents.serve_upload', filename=d.filename) }}" target="_blank" class="btn-icon" title="Download">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              </a>
+              <button class="doc-del" title="Delete" data-id="{{ d.id }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+              </button>
+            </div>
           </div>
           {% endfor %}
         </div>
@@ -127,10 +132,27 @@
 
     <!-- Notes -->
     <div class="tab-pane" data-pane="notes">
+      <div class="card" style="margin-bottom: 20px; background: var(--surface-2);">
+        <div class="ch">
+          <h3>Add New Note</h3>
+          <span class="sub">Personal memos & observations</span>
+        </div>
+        <form id="add-note-form" style="display: flex; flex-direction: column; gap: 12px;">
+          <input type="text" id="note-title" placeholder="Note Title (optional)" style="background: var(--bg); border: 1px solid var(--border-2); padding: 10px; border-radius: 6px; color: var(--text);">
+          <textarea id="note-content" placeholder="Enter your note here..." required style="background: var(--bg); border: 1px solid var(--border-2); padding: 10px; border-radius: 6px; color: var(--text); min-height: 80px; resize: vertical;"></textarea>
+          <div style="display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary" style="padding: 8px 20px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;"><path d="M12 5v14M5 12h14"/></svg>
+              Save Note
+            </button>
+          </div>
+        </form>
+      </div>
+
       <div class="note-grid" id="note-grid">
         {% for n in active_case.notes or [] %}
           {% if n.type == 'voice' or n.note_type == 'voice' %}
-          <div class="voice-note">
+          <div class="voice-note" data-id="{{ n.id }}">
             <button class="play" title="Play">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7V5z"/></svg>
             </button>
@@ -141,12 +163,20 @@
               </div> -->
             </div>
             <div class="vdur">{{ n.duration or '00:00' }}</div>
+            <button class="note-del" title="Delete Note">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+            </button>
           </div>
           {% else %}
-          <div class="note">
+          <div class="note" data-id="{{ n.id }}">
             <div class="nt">
               <span class="ttl">{{ n.title or 'Note' }}</span>
-              <span class="tag">Note</span>
+              <div style="display: flex; align-items: center;">
+                <span class="tag">Note</span>
+                <button class="note-del" title="Delete Note">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+                </button>
+              </div>
             </div>
             <p>{{ n.content }}</p>
           </div>
@@ -168,6 +198,22 @@
     </div>
     <div id="preview-content" class="doc-preview-content">
       <!-- Content loaded via API -->
+    </div>
+  </div>
+</div>
+
+{# ----- Document Summary Modal (Reusing styles from docs page if needed) ----- #}
+<div class="doc-preview-overlay" id="summary-modal">
+  <div class="doc-preview-box" style="height: auto; max-height: 80%; width: 600px;">
+    <div class="doc-preview-header">
+      <div>
+        <h3 id="summary-doc-name">Document Summary</h3>
+      </div>
+      <button class="close-preview" id="close-summary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M6 18L18 6"/></svg>
+      </button>
+    </div>
+    <div class="doc-preview-content" id="summary-text" style="padding: 30px; line-height: 1.6; color: #333;">
     </div>
   </div>
 </div>
@@ -208,13 +254,13 @@
       </div>
 
       <div class="chat-input-wrap">
-        <div id="analyze-wrap" class="analyze-wrap">
+        <div id="analyze-wrap" class="analyze-wrap" style="{% if active_case.analysis_status == 'completed' or active_case.analysis_status == 'processing' %}display: none;{% else %}display: flex;{% endif %}">
           <button id="analyze-btn" class="analyze-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
             Analyze Case Facts
           </button>
         </div>
-        <form class="chat-input" id="chat-form" autocomplete="off" style="display:none;">
+        <form class="chat-input" id="chat-form" autocomplete="off" style="{% if active_case.analysis_status == 'completed' %}display: flex;{% else %}display: none;{% endif %}">
           <input type="text" id="chat-input" placeholder="Ask about judgments, sections, drafts…" />
           <button type="button" class="icon-btn" title="Voice input">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v4M8 22h8"/></svg>

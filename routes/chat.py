@@ -5,17 +5,28 @@
 # echo a placeholder reply so the front-end can be wired up before the real
 # Gemini / Indian Kanoon pipeline is plugged in.
 # ---------------------------------------------------------------------------
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 
 from models import ChatMessage, Case, db
 
 chat_bp = Blueprint("chat", __name__)
 
 
+def login_required_api(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'firm_id' not in session:
+            return jsonify({"ok": False, "error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 @chat_bp.get("/cases/<int:case_id>/chat")
+@login_required_api
 def list_messages(case_id: int):
     """GET /cases/<id>/chat — return the conversation history, oldest first."""
-    case = db.session.get(Case, case_id)
+    case = db.session.query(Case).filter_by(id=case_id, firm_id=session['firm_id']).first()
     if not case:
         return jsonify({"ok": False, "error": "Case not found"}), 404
 
@@ -33,6 +44,7 @@ def list_messages(case_id: int):
 
 
 @chat_bp.post("/cases/<int:case_id>/chat")
+@login_required_api
 def post_message(case_id: int):
     """
     POST /cases/<id>/chat
@@ -40,7 +52,7 @@ def post_message(case_id: int):
     Persists the lawyer's message, persists a placeholder AI reply, returns
     both as JSON so the UI can render them in one round trip.
     """
-    case = db.session.get(Case, case_id)
+    case = db.session.query(Case).filter_by(id=case_id, firm_id=session['firm_id']).first()
     if not case:
         return jsonify({"ok": False, "error": "Case not found"}), 404
 
@@ -49,8 +61,8 @@ def post_message(case_id: int):
     if not content:
         return jsonify({"ok": False, "error": "content is required"}), 400
 
-    # 1. Save the lawyer's question.
-    user_msg = ChatMessage(case_id=case_id, role="lawyer", content=content)
+    # 1. Save the user's question.
+    user_msg = ChatMessage(case_id=case_id, role="user", content=content)
     db.session.add(user_msg)
 
     # 2. Stub AI reply. Real implementation will call Gemini + Indian Kanoon.

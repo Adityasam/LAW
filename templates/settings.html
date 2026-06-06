@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% set breadcrumbs = [{ "label": "Settings" }] %}
+{% set nav_active  = "settings" %}
+
+{% block title %}Settings · LegalMind{% endblock %}
+{% block page_id %}settings{% endblock %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+{% endblock %}
+
+{% block main_block %}
+<main class="settings-page">
+  <header class="settings-header">
+    <div class="lhs">
+      <div class="eyebrow">Workspace Configuration</div>
+      <h2>Settings</h2>
+      <div class="sub">Configure your firm details, AI preferences, and system behavior.</div>
+    </div>
+    <div class="rhs-actions">
+      <button class="btn btn-primary" id="save-settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+        Save Changes
+      </button>
+    </div>
+  </header>
+
+  <div class="settings-body">
+    <div class="settings-card">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="firm">Firm Details</button>
+        <button class="tab" data-tab="ai">AI Options</button>
+        <button class="tab" data-tab="billing">Billing</button>
+      </div>
+
+      <div class="tab-content">
+        <!-- Firm Details -->
+        <div class="tab-pane active" data-pane="firm">
+          <form id="firm-form" class="settings-form">
+            <div class="form-group">
+              <label>Firm Name</label>
+              <input type="text" name="firm_name" value="{{ settings.firm_name }}" placeholder="e.g. Agarwal & Associates">
+            </div>
+            <div class="form-group">
+              <label>Contact Person</label>
+              <input type="text" name="lawyer_name" value="{{ settings.lawyer_name }}" placeholder="e.g. Adv. Suresh Agarwal">
+            </div>
+            <div class="form-group">
+              <label>Office Address</label>
+              <textarea name="address" placeholder="Enter your full office address...">{{ settings.address }}</textarea>
+            </div>
+            <div class="form-group">
+              <label>Default Court</label>
+              <input type="text" name="default_court" value="{{ settings.default_court }}" placeholder="e.g. High Court of Madhya Pradesh">
+            </div>
+          </form>
+        </div>
+
+        <!-- AI Options -->
+        <div class="tab-pane" data-pane="ai">
+          <form id="ai-form" class="settings-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label>AI Response Language</label>
+                <select name="ai_language">
+                  <option value="English" {% if settings.ai_language == 'English' %}selected{% endif %}>English</option>
+                  <option value="Hindi" {% if settings.ai_language == 'Hindi' %}selected{% endif %}>Hindi (Devanagari)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Judgments per Query</label>
+                <select name="max_judgments">
+                  <option value="3" {% if settings.max_judgments == 3 %}selected{% endif %}>Standard (3 judgments)</option>
+                  <option value="6" {% if settings.max_judgments == 6 %}selected{% endif %}>Detailed (6 judgments)</option>
+                  <option value="9" {% if settings.max_judgments == 9 %}selected{% endif %}>Comprehensive (9 judgments)</option>
+                </select>
+                <span class="hint">Higher values provide more depth but may increase response time.</span>
+              </div>
+            </div>
+
+            <div class="form-group toggle-group">
+              <div class="toggle-info">
+                <label>Always include IPC equivalent</label>
+                <p>Show the old IPC/CrPC equivalent section when citing the new BNS/BNSS codes.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" name="include_ipc_equivalent" {% if settings.include_ipc_equivalent %}checked{% endif %}>
+                <span class="slider round"></span>
+              </label>
+            </div>
+          </form>
+        </div>
+
+        <!-- Billing (Placeholder) -->
+        <div class="tab-pane" data-pane="billing">
+          <div class="empty-state">
+            <div class="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M7 15h.01M11 15h2"/></svg>
+            </div>
+            <h3>Billing Information</h3>
+            <p>Subscription and billing management will be available once the multi-user system is launched.</p>
+            <div class="badge-status">Coming Soon</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

@@ -3,3 +3,4 @@ uploads/
 vakilai.db
 data/
 __pycache__/
+service/__pycache__/

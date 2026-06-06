@@ -1,5 +1,5 @@
 /* -------------------------------------------------------------------------
-   Dashboard page — VakilAI
+   Dashboard page — LegalMind
    Two-column grid: stats on the left, recent-cases list on the right.
    The new-case modal lives in dashboard.html and uses the shared
    .modal / .field styles from styles.css.

@@ -8,7 +8,7 @@
 {% set breadcrumbs = [{ "label": "Dashboard" }] %}
 {% set nav_active  = "dashboard" %}
 
-{% block title %}Dashboard · VakilAI{% endblock %}
+{% block title %}Dashboard · LegalMind{% endblock %}
 {% block page_id %}dashboard{% endblock %}
 {% block extra_css %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
@@ -67,94 +67,17 @@
   </div>
 </main>
 
-{# ----- New Case modal (hidden until .open is added) ----- #}
-<div class="modal-backdrop" id="new-case-modal" role="dialog" aria-modal="true" aria-labelledby="new-case-title">
-  <div class="modal">
-    <div class="modal-header">
-      <div>
-        <h3 id="new-case-title">Create a New Case</h3>
-        <div class="sub">Fill in the details, attach supporting documents</div>
-      </div>
-      <button class="modal-close" id="close-new-case" title="Close" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M6 18L18 6"/></svg>
-      </button>
-    </div>
-
-    <form id="new-case-form">
-      <div class="modal-body">
-        <div class="field-row">
-          <div class="field">
-            <label for="f-title">Case Title *</label>
-            <input id="f-title" name="title" type="text" placeholder="e.g. State vs Sharma" required>
-          </div>
-          <div class="field">
-            <label for="f-client">Client Name *</label>
-            <input id="f-client" name="client" type="text" placeholder="e.g. Rakesh Sharma" required>
-          </div>
-        </div>
-
-        <div class="field-row">
-          <div class="field">
-            <label for="f-type">Case Type *</label>
-            <select id="f-type" name="case_type" required>
-              <option value="Criminal">Criminal</option>
-              <option value="Civil">Civil</option>
-              <option value="Family">Family</option>
-              <option value="Tax">Tax</option>
-              <option value="Corporate">Corporate</option>
-              <option value="IP">Intellectual Property</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="f-hearing">Next Hearing Date</label>
-            <input id="f-hearing" name="hearing_date" type="date">
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="f-court">Court / Forum</label>
-          <input id="f-court" name="court" type="text" placeholder="e.g. Sessions Court, Patiala House, Delhi">
-        </div>
-
-        <div class="field">
-          <label for="f-sections">Relevant Sections / Acts</label>
-          <input id="f-sections" name="sections" type="text" placeholder="Comma-separated, e.g. BNS 103, BNSS 479, NI Act 138">
-        </div>
-
-        <div class="field">
-          <label for="f-facts">Case Details / Facts</label>
-          <textarea id="f-facts" name="facts" placeholder="Write a short summary of the matter, key events, parties involved, and the relief sought…"></textarea>
-        </div>
-
-        <div class="field">
-          <label>Supporting Documents</label>
-          <label class="drop-zone" id="drop-zone">
-            <input id="doc-files" type="file" multiple accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png">
-            <div class="t">Drop files here or <span style="color:var(--gold)">browse</span></div>
-            <div class="s">PDF, DOC, DOCX, TXT, JPG, PNG up to 16 MB each</div>
-          </label>
-          <div class="upload-list" id="doc-file-list"></div>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn btn-ghost"   type="button" id="cancel-new-case">Cancel</button>
-        <button class="btn btn-primary" type="submit"  id="submit-new-case">Create Case</button>
-      </div>
-    </form>
-  </div>
-</div>
+{% include "_new_case_modal.html" %}
 {% endblock %}
 
 {% block extra_js %}
   <script>
     // Payload injected for dashboard.js
     window.__DASH__ = {
-      cases:   {{ cases|tojson }},
-      lawyers: {{ lawyers|tojson }},
-      stats:   {{ stats|tojson }}
+      cases:   {{ cases|tojson|safe }},
+      stats:   {{ stats|tojson|safe }}
     };
   </script>
+  <script src="{{ url_for('static', filename='js/new_case.js') }}"></script>
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}
