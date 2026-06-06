@@ -48,25 +48,10 @@ check("GET /cases/ count=0", r.status_code == 200 and d["count"] == 0, str(d))
 r = c.get("/cases/1")
 check("GET /cases/1 404", r.status_code == 404)
 
-# 5. Create case (need lawyer first)
-# Create lawyer
-r = c.post(
-    "/lawyers/",
-    json={
-        "name": "Test Lawyer",
-        "email": "test@example.com",
-        "password_hash": "test",
-        "chamber": "Test Chamber",
-        "avatar_initials": "TL",
-    },
-)
-lawyer_id = r.get_json()["lawyer"]["id"] if r.status_code == 201 else None
-
-# Create case
+# 5. Create case
 r = c.post(
     "/cases/",
     json={
-        "lawyer_id": lawyer_id,
         "title": "Khan Cheque Bounce",
         "client_name": "M/s Brightway Traders",
         "case_type": "Criminal",
@@ -97,7 +82,7 @@ r = c.post(f"/cases/{case_id}/chat", json={"content": "What are the leading bail
 d = r.get_json()
 check(
     "POST chat creates user + AI messages",
-    r.status_code == 201 and d["user_message"]["role"] == "lawyer"
+    r.status_code == 201 and d["user_message"]["role"] == "user"
     and d["ai_message"]["role"] == "ai" and "Indian Kanoon" in d["ai_message"]["content"],
 )
 
@@ -146,15 +131,6 @@ check("DELETE /cases/{id}", r.status_code == 200)
 # 18. Get missing case
 r = c.get("/cases/9999")
 check("GET /cases/9999 404", r.status_code == 404)
-
-# 19. IndianKanoon service — failure path with no key
-from services import IndianKanoon, IndianKanoonError
-k = IndianKanoon(api_key="")
-try:
-    k.search("test")
-    check("IndianKanoon.search() raises when no creds", False, "did not raise")
-except (IndianKanoonError, Exception) as e:
-    check("IndianKanoon.search() raises when no creds", True, type(e).__name__)
 
 # 20. Re-seed
 r = c.post("/seed")

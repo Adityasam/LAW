@@ -1,6 +1,7 @@
 import os
 import requests
 import json
+import math
 from google import genai
 from google.genai import types
 from config import Config
@@ -75,8 +76,6 @@ You must respond exactly as a senior advocate would brief a junior — specific,
 tactical, no fluff.
 
 ANSWER STYLE:
-- Language - Hindi
-- Script - Devanagari
 - Never give textbook definitions — the lawyer knows the law
 - Always give tactical advice — what to argue, how to argue, what to watch for
 - When asked about hearing preparation, give a specific game plan for THIS case
@@ -107,7 +106,7 @@ When asked to prepare for a hearing, always structure as:
 
 # ── Step 1: Fetch judgments from Indian Kanoon ─────────────────────────────────
 
-def fetch_kanoon_results(queries: list[str], results_per_query: int = 3) -> list[dict]:
+def fetch_kanoon_results(queries: list[str], results_per_query: int = 3, firm_id: int = None) -> list[dict]:
     """
     Takes list of search queries from extractor output.
     Returns list of judgment dicts with title + snippet.
@@ -116,7 +115,29 @@ def fetch_kanoon_results(queries: list[str], results_per_query: int = 3) -> list
     judgments = []
     seen_ids = set()
 
-    for query in queries:
+    if firm_id:
+        from models import get_firm_settings
+        settings = get_firm_settings(firm_id)
+        results_per_query = settings.max_judgments
+
+    if results_per_query not in [3, 6, 9]:
+        results_per_query = 3
+
+    if not queries:
+        return []
+
+    remaining_budget = results_per_query
+    for i, query in enumerate(queries):
+        if remaining_budget <= 0:
+            break
+
+        # Calculate target for this query to ensure fair distribution
+        # e.g., if 6 results total and 4 queries: 
+        # 1st query target = ceil(6/4) = 2.
+        # If 1st query gets 2, 2nd query target = ceil(4/3) = 2.
+        queries_left = len(queries) - i
+        target_for_this_query = math.ceil(remaining_budget / queries_left)
+
         try:
             response = requests.post(
                 "https://api.indiankanoon.org/search/",
@@ -125,8 +146,9 @@ def fetch_kanoon_results(queries: list[str], results_per_query: int = 3) -> list
                 timeout=10
             )
             data = response.json()
-            docs = data.get("docs", [])[:results_per_query]
+            docs = data.get("docs", [])
 
+            case_count = 0
             for doc in docs:
                 doc_id = doc.get("tid")
                 if doc_id and doc_id not in seen_ids:
@@ -139,6 +161,12 @@ def fetch_kanoon_results(queries: list[str], results_per_query: int = 3) -> list
                         "url": f"https://indiankanoon.org/doc/{doc_id}/",
                         "doc_id": doc_id
                     })
+
+                    case_count += 1
+                    remaining_budget -= 1
+                    
+                    if case_count >= target_for_this_query or remaining_budget <= 0:
+                        break
         except Exception as e:
             print(f"Kanoon query failed for '{query}': {e}")
             continue
@@ -195,16 +223,16 @@ def build_user_message(case_description: str, extracted: dict, judgments: list[d
 
 # ── Step 3: Get Gemini advice ──────────────────────────────────────────────────
 
-def get_legal_advice(case_description: str, extracted: dict) -> dict:
+def get_legal_advice(case_description: str, extracted: dict, firm_id: int = None) -> dict:
     """
-    Main function to call from Flask route.
-    Pass case_description and extracted entities from extractor.py.
-    Returns judgment links (no Gemini advice yet).
+    Main entry point for research:
+    1. Fetches judgments from Kanoon using suggested queries.
+    2. Builds a comprehensive prompt with facts + sections + judgments.
+    3. Returns the Gemini-generated analysis.
     """
-
     # Fetch Kanoon data using queries from extractor
     queries = extracted.get("suggested_kanoon_queries", [])
-    judgments = fetch_kanoon_results(queries)
+    judgments = fetch_kanoon_results(queries, firm_id=firm_id)
 
     print(f"Retrieved {len(judgments)} judgments for queries: {queries}")
 
@@ -213,9 +241,9 @@ def get_legal_advice(case_description: str, extracted: dict) -> dict:
         "judgments": judgments      # Return these so UI can show clickable links
     }
 
-def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: list[dict] = None, case_facts: str = None, doc_summaries: list[dict] = None, judgment_summaries: list[dict] = None):
+def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: list[dict] = None, case_facts: str = None, doc_summaries: list[dict] = None, judgment_summaries: list[dict] = None, case_notes: list[dict] = None, language: str = "English"):
     """
-    Streams a response from Gemini using RAG chunks, chat history, case facts, doc summaries, and judgment summaries.
+    Streams a response from Gemini using RAG chunks, chat history, case facts, doc summaries, judgment summaries, and case notes.
     """
     context_parts = []
     for i, item in enumerate(relevant_chunks):
@@ -241,20 +269,32 @@ def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: l
             judgment_context += f"Judgment {i+1} ({j.get('title')}): {j.get('summary')}\n"
         judgment_context += "\n"
 
-    # 4. Build Contents (History + Current Prompt)
+    # 4. Format Case Notes
+    notes_context = ""
+    if case_notes:
+        notes_context = "CASE NOTES & OBSERVATIONS:\n"
+        for i, n in enumerate(case_notes):
+            notes_context += f"Note {i+1} ({n.get('title')}): {n.get('content')}\n"
+        notes_context += "\n"
+
+    # 5. Build Contents (History + Current Prompt)
     contents = []
     if history:
         for msg in history:
-            role = "user" if msg["role"] == "lawyer" else "model"
+            role = "user" if msg["role"] in ("user", "lawyer") else "model"
             contents.append(types.Content(role=role, parts=[types.Part(text=msg["content"])]))
             
     # Add current prompt with context, facts and summaries
     facts_context = f"AI CASE BRIEF (SUMMARY OF FACTS):\n{case_facts}\n\n" if case_facts else ""
     
-    # Instruction to prioritize document summaries
-    instructions = "\nIMPORTANT: Heavily rely on the UPLOADED DOCUMENT SUMMARIES below for specific case details (FIR contents, charge sheet points, etc.). Incorporate these into your advice.\n\n"
+    # Instruction to prioritize document summaries and notes
+    lang_instr = f"\nRESPONSE LANGUAGE: {language}. Always respond in {language}."
+    if language == "Hindi":
+        lang_instr += " Use Devanagari script for Hindi."
+        
+    instructions = f"\nIMPORTANT: Heavily rely on the UPLOADED DOCUMENT SUMMARIES and CASE NOTES below for specific case details (FIR contents, charge sheet points, specific observations, etc.). Incorporate these into your advice.{lang_instr}\n\n"
     
-    full_prompt = f"{facts_context}{doc_context}{judgment_context}{instructions}DETAILED SNIPPETS FROM JUDGMENTS:\n{context}\n\nUSER QUESTION: {user_message}"
+    full_prompt = f"{facts_context}{doc_context}{judgment_context}{notes_context}{instructions}DETAILED SNIPPETS FROM JUDGMENTS:\n{context}\n\nUSER QUESTION: {user_message}"
     contents.append(types.Content(role="user", parts=[types.Part(text=full_prompt)]))
 
     response = client.models.generate_content_stream(

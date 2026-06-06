@@ -14,8 +14,7 @@
   const { $, $$, escapeHTML, initialsOf, fmtDateShort, api, toast, user } = App;
 
   // -- Payload injected by the server ----------------------------------- //
-  const data = window.__DASH__ || { cases: [], lawyers: [], stats: {} };
-  const userLawyer = data.lawyers && data.lawyers[0];
+  const data = window.__DASH__ || { cases: [], stats: {} };
 
   // ---------- Stat strip ---------- //
   function renderStats(){

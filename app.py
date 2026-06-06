@@ -10,13 +10,18 @@
 #    realistic Indian dummy data (2 lawyers, 3 cases, 4 documents, 2 notes
 #    per case)
 # ---------------------------------------------------------------------------
-from datetime import date, timedelta
+import os
+import uuid
+import functools
+from datetime import date, timedelta, datetime
 import json
+from pathlib import Path
 
-from flask import Flask, redirect, render_template, url_for, request, session, Response
+from flask import Flask, redirect, render_template, url_for, request, session, Response, jsonify, flash, send_from_directory
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import Config
-from models import Case, ChatMessage, Document, Lawyer, Note, db
+from models import Case, ChatMessage, Document, Note, db, Setting, Judgment, get_firm_settings
 from routes import cases_bp, chat_bp, documents_bp
 from keyExtractor import extract_case_entities
 from advisor import get_legal_advice, fetch_doc_by_id, stream_legal_chat
@@ -44,29 +49,39 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.register_blueprint(documents_bp)
     app.register_blueprint(chat_bp)
 
+    def login_required(f):
+        @functools.wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'firm_id' not in session:
+                return redirect(url_for('login', next=request.url))
+            return f(*args, **kwargs)
+        return decorated_function
+
     # ---- Routes --------------------------------------------------------- #
     @app.get("/")
+    @login_required
     def index():
         """Landing — just bounces to the dashboard."""
         return redirect(url_for("dashboard"))
 
     # ---- Helpers used by both /dashboard and /cases/<id> ------------- #
     def _current_user() -> dict:
-        """Pick the first lawyer as the "current user" — no auth yet."""
-        lawyer = Lawyer.query.order_by(Lawyer.id.asc()).first()
+        """Pick firm as the "current user"."""
+        firm_name = session.get('firm_name', 'Firm')
+        initials = "".join([n[0] for n in firm_name.split()[:2]]).upper()
         return {
-            "name":            lawyer.name            if lawyer else "Advocate",
-            "designation":     "Senior Counsel",
-            "chamber":         lawyer.chamber         if lawyer else "Independent Chamber",
-            "avatar_initials": lawyer.avatar_initials if lawyer else "AC",
+            "name":            firm_name,
+            "designation":     "Law Firm",
+            "chamber":         "Firm Workspace",
+            "avatar_initials": initials or "LF",
         }
-
-    def _all_lawyers() -> list[dict]:
-        return [l.to_dict() for l in Lawyer.query.order_by(Lawyer.id.asc()).all()]
 
     def _all_cases() -> list[dict]:
         """All cases in the system, hydrated for the UI (sidebar / dashboard)."""
-        rows = Case.query.order_by(Case.id.desc()).all()
+        firm_id = session.get('firm_id')
+        if not firm_id: return []
+        
+        rows = Case.query.filter_by(firm_id=firm_id).order_by(Case.id.desc()).all()
         out = []
         for c in rows:
             d = c.to_dict(include_relations=True)
@@ -75,8 +90,6 @@ def create_app(config_class: type[Config] = Config) -> Flask:
             d["client"]          = d.get("client_name")
             d["type"]            = d.get("case_type")
             d["next_hearing"]    = d.get("hearing_date")
-            d["lawyer"]          = c.lawyer.name if c.lawyer else None
-            d["assigned_lawyer"] = c.lawyer.name if c.lawyer else None
             d["id_display"]      = f"CASE-{c.id:04d}"
             out.append(d)
         return out
@@ -87,6 +100,50 @@ def create_app(config_class: type[Config] = Config) -> Flask:
             st = (c.get("status") or "Active").lower()
             if st in s: s[st] += 1
         return s
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if request.method == "POST":
+            identifier = request.form.get("identifier")
+            password = request.form.get("password")
+            from models import Firm
+            firm = Firm.query.filter((Firm.email == identifier) | (Firm.username == identifier)).first()
+            if firm and check_password_hash(firm.password_hash, password):
+                session['firm_id'] = firm.id
+                session['firm_name'] = firm.name
+                next_page = request.args.get('next')
+                return redirect(next_page or url_for('index'))
+            else:
+                flash("Invalid username/email or password", "error")
+        return render_template("login.html")
+
+    @app.route("/signup", methods=["GET", "POST"])
+    def signup():
+        if request.method == "POST":
+            name = request.form.get("name")
+            username = request.form.get("username")
+            email = request.form.get("email")
+            password = request.form.get("password")
+            from models import Firm
+            if Firm.query.filter((Firm.email == email) | (Firm.username == username)).first():
+                flash("Username or Email already registered", "error")
+            else:
+                new_firm = Firm(
+                    name=name, 
+                    username=username, 
+                    email=email, 
+                    password_hash=generate_password_hash(password)
+                )
+                db.session.add(new_firm)
+                db.session.commit()
+                flash("Account created! Please log in.", "success")
+                return redirect(url_for('login'))
+        return render_template("signup.html")
+
+    @app.route("/logout")
+    def logout():
+        session.clear()
+        return redirect(url_for('login'))
 
     def _chat_for(case_id: int) -> list[dict]:
         msgs = (
@@ -106,6 +163,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         return out
 
     @app.get("/dashboard")
+    @login_required
     def dashboard():
         """Render the dashboard — the new entry point for the app."""
         user  = _current_user()
@@ -114,11 +172,11 @@ def create_app(config_class: type[Config] = Config) -> Flask:
             "dashboard.html",
             user=user,
             cases=cases,
-            lawyers=_all_lawyers(),
             stats=_case_stats(cases),
         )
 
     @app.get("/case/<int:case_id>")
+    @login_required
     def case_detail(case_id: int):
         """Render the case-details page for a specific case."""
         case = db.session.get(Case, case_id)
@@ -149,12 +207,13 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         )
 
     @app.get("/documents")
+    @login_required
     def documents_page():
         """Render the all-documents page."""
         user = _current_user()
         cases = _all_cases()
-        # Fetch all documents with their case information
-        docs = Document.query.order_by(Document.uploaded_at.desc()).all()
+        # Fetch all documents for the firm's cases
+        docs = Document.query.join(Case).filter(Case.firm_id == session['firm_id']).order_by(Document.uploaded_at.desc()).all()
         hydrated_docs = []
         for d in docs:
             item = d.to_dict()
@@ -170,6 +229,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         )
 
     @app.get("/cases")
+    @login_required
     def cases_page():
         """Render the full case-list page."""
         user = _current_user()
@@ -180,6 +240,81 @@ def create_app(config_class: type[Config] = Config) -> Flask:
             cases=cases,
             stats=_case_stats(cases)
         )
+
+    @app.get("/settings")
+    @login_required
+    def settings_page():
+        """Render the settings page."""
+        user = _current_user()
+        cases = _all_cases()
+        settings = get_firm_settings(session['firm_id'])
+        return render_template(
+            "settings.html",
+            user=user,
+            cases=cases,
+            settings=settings
+        )
+
+    @app.post("/settings")
+    @login_required
+    def save_settings():
+        """Update workspace settings."""
+        payload = request.get_json() or {}
+        s = get_firm_settings(session['firm_id'])
+        
+        # Firm Details
+        s.firm_name = payload.get("firm_name")
+        s.lawyer_name = payload.get("lawyer_name")
+        s.address = payload.get("address")
+        s.default_court = payload.get("default_court")
+        
+        # AI Options
+        s.ai_language = payload.get("ai_language", "English")
+        s.include_ipc_equivalent = bool(payload.get("include_ipc_equivalent"))
+        s.max_judgments = int(payload.get("max_judgments", 3))
+        
+        db.session.commit()
+        return {"ok": True}
+
+    @app.post("/cases/<int:case_id>/notes")
+    @login_required
+    def add_note(case_id: int):
+        """POST /cases/<id>/notes — add a new note to a case."""
+        case = Case.query.filter_by(id=case_id, firm_id=session['firm_id']).first()
+        if not case:
+            return {"error": "Case not found or access denied"}, 404
+        
+        payload = request.get_json(silent=True) or {}
+        content = payload.get("content")
+        if not content:
+            return {"error": "Content is required"}, 400
+            
+        new_note = Note(
+            case_id=case_id,
+            title=payload.get("title") or "Note",
+            content=content,
+            note_type="text"
+        )
+        try:
+            db.session.add(new_note)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return {"error": str(e)}, 500
+        
+        return {"ok": True, "note": new_note.to_dict()}
+
+    @app.delete("/notes/<int:note_id>")
+    @login_required
+    def delete_note(note_id: int):
+        """DELETE /notes/<id> — remove a note."""
+        note = Note.query.join(Case).filter(Note.id == note_id, Case.firm_id == session['firm_id']).first()
+        if not note:
+            return {"error": "Note not found or access denied"}, 404
+        
+        db.session.delete(note)
+        db.session.commit()
+        return {"ok": True}
 
     @app.get("/health")
     def health():
@@ -215,13 +350,14 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         }
 
     @app.post("/extract")
+    @login_required
     def extract():
         """Manual trigger for case analysis (research + summary)."""
         case_id = request.json.get("case_id")
         if not case_id:
             return {"error": "case_id is required"}, 400
         
-        case = Case.query.get(case_id)
+        case = Case.query.filter_by(id=case_id, firm_id=session['firm_id']).first()
         if not case:
             return {"error": "Case not found"}, 404
             
@@ -245,17 +381,21 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         }
 
     @app.get("/cases/<int:case_id>/chat")
+    @login_required
     def get_chat_history(case_id):
         """Fetch chat history for a specific case."""
-        case = db.session.get(Case, case_id)
+        case = Case.query.filter_by(id=case_id, firm_id=session['firm_id']).first()
+        if not case:
+            return {"error": "Case not found"}, 404
         msgs = ChatMessage.query.filter_by(case_id=case_id).order_by(ChatMessage.created_at.asc()).all()
         return {
             "ok": True,
-            "analysis_status": case.analysis_status if case else "pending",
+            "analysis_status": case.analysis_status,
             "messages": [m.to_dict() for m in msgs]
         }
 
     @app.post("/chat-stream")
+    @login_required
     def chat_stream():
         """RAG-based streaming chat with context preservation."""
         case_id = request.json.get("case_id")
@@ -264,17 +404,21 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         if not case_id or not user_msg:
             return {"error": "case_id and message are required"}, 400
             
+        case = Case.query.filter_by(id=case_id, firm_id=session['firm_id']).first()
+        if not case:
+            return {"error": "Case not found"}, 404
+
         # 1. Fetch history and case facts from DB
         history_msgs = ChatMessage.query.filter_by(case_id=case_id).order_by(ChatMessage.created_at.asc()).all()
-        history = [{"role": m.role, "content": m.content} for m in history_msgs]
+        history = [{"role": "user" if m.role in ("user", "lawyer") else "model", "content": m.content} for m in history_msgs]
         
-        case = Case.query.get(case_id)
         # Use AI summary for chat context if available, fallback to raw facts
-        case_context = (case.ai_summary if case and case.ai_summary else (case.facts if case else ""))
+        case_context = (case.ai_summary if case.ai_summary else (case.facts or ""))
         
-        # 2. Fetch document summaries
+        # 2. Fetch document summaries and notes
         doc_summaries = []
         judgment_summaries = []
+        case_notes = []
         if case:
             for doc in case.documents:
                 if doc.summary:
@@ -283,25 +427,32 @@ def create_app(config_class: type[Config] = Config) -> Flask:
             for j in case.judgments:
                 if j.summary:
                     judgment_summaries.append({"title": j.title, "summary": j.summary})
+            
+            for note in case.notes:
+                case_notes.append({"title": note.title or "Note", "content": note.content})
 
         # 3. Get RAG context
         relevant = get_relevant_chunks(case_id, user_msg)
+        firm_id = session['firm_id']
+        settings = get_firm_settings(firm_id)
+        ai_lang = settings.ai_language
         
         def generate():
             full_response = ""
-            for text in stream_legal_chat(user_msg, relevant, history, case_context, doc_summaries, judgment_summaries):
+            for text in stream_legal_chat(user_msg, relevant, history, case_context, doc_summaries, judgment_summaries, case_notes, language=ai_lang):
                 full_response += text
                 yield text
             
             # 3. Persist exchange to DB after stream finishes
             with app.app_context():
-                db.session.add(ChatMessage(case_id=case_id, role="lawyer", content=user_msg))
+                db.session.add(ChatMessage(case_id=case_id, role="user", content=user_msg))
                 db.session.add(ChatMessage(case_id=case_id, role="ai", content=full_response))
                 db.session.commit()
                 
         return Response(generate(), mimetype='text/event-stream')
 
     @app.post("/get-doc")
+    @login_required
     def get_doc():
         """Fetch document content by ID."""
         doc_id = request.json.get("doc_id")

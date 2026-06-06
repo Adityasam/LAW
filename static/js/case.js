@@ -14,6 +14,7 @@
   const userInitials = (user && user.avatar_initials) || 'L';
   const chatBody = $('#chat-body');
   const docList = $('#doc-list');
+  const noteGrid = $('#note-grid');
 
   // ---------- Sidebar selection ---------- //
   const caseList = $('#case-list');
@@ -46,7 +47,6 @@
       facts:        el.getAttribute('data-facts'),
       ai_summary:   el.getAttribute('data-ai_summary'),
       analysis_status: el.getAttribute('data-analysis_status') || 'pending',
-      lawyer:       el.getAttribute('data-lawyer'),
       documents:    parseJson(el.dataset.documents),
       notes:        parseJson(el.dataset.notes)
     };
@@ -81,11 +81,6 @@
     }
 
     if($('#case-facts')) $('#case-facts').textContent = d.facts || '';
-    if($('#lawyer-name')) $('#lawyer-name').textContent     = d.lawyer || '—';
-    if($('#lawyer-chamber')) $('#lawyer-chamber').textContent  = (d.lawyer && user && d.lawyer === user.name)
-      ? (user.chamber || 'Senior Counsel')
-      : 'Senior Counsel';
-    if($('#lawyer-initials')) $('#lawyer-initials').textContent = initialsOf(d.lawyer);
 
     // Section chips
     if($('#case-sections')) $('#case-sections').innerHTML = (d.sections || [])
@@ -123,7 +118,6 @@
     }
 
     // Notes
-    const noteGrid = $('#note-grid');
     if(noteGrid){
       noteGrid.innerHTML = (d.notes || []).map(n => {
         if(n.type === 'voice' || n.note_type === 'voice'){
@@ -132,7 +126,7 @@
             return `<span style="height:${h.toFixed(1)}px"></span>`;
           }).join('');
           return `
-            <div class="voice-note">
+            <div class="voice-note" data-id="${n.id}">
               <button class="play" title="Play">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7V5z"/></svg>
               </button>
@@ -141,13 +135,21 @@
                 <div class="waveform">${bars}</div>
               </div>
               <div class="vdur">${escapeHTML(n.duration || '00:00')}</div>
+              <button class="note-del" title="Delete Note">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+              </button>
             </div>`;
         }
         return `
-          <div class="note">
+          <div class="note" data-id="${n.id}">
             <div class="nt">
               <span class="ttl">${escapeHTML(n.title || 'Note')}</span>
-              <span class="tag">Note</span>
+              <div style="display: flex; align-items: center;">
+                <span class="tag">Note</span>
+                <button class="note-del" title="Delete Note">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+                </button>
+              </div>
             </div>
             <p>${escapeHTML(n.content)}</p>
           </div>`;
@@ -270,6 +272,85 @@
     });
   }
 
+  // ---------- Add Note ---------- //
+  const addNoteForm = $('#add-note-form');
+  if(addNoteForm){
+    addNoteForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const title = $('#note-title').value;
+      const content = $('#note-content').value;
+      if(!content) return;
+
+      const btn = addNoteForm.querySelector('button[type="submit"]');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = 'Saving...';
+
+      try {
+        console.log('Adding note to case:', data.active.id);
+        const res = await api.post(`/cases/${data.active.id}/notes`, { title, content });
+        
+        if(res.ok){
+          // Update sidebar data so it persists in memory
+          const activeItem = $('.case-item.active');
+          if(activeItem){
+            const notes = JSON.parse(activeItem.dataset.notes || '[]');
+            notes.push(res.note);
+            activeItem.dataset.notes = JSON.stringify(notes);
+            renderCase(activeItem);
+          }
+          $('#note-title').value = '';
+          $('#note-content').value = '';
+          toast('Note added successfully', 'success');
+        } else {
+          throw new Error(res.error || 'Failed to save note');
+        }
+      } catch (err) {
+        console.error('Note add error:', err);
+        alert(err.message || 'Failed to add note');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    });
+  }
+
+  // ---------- Delete Note ---------- //
+  if(noteGrid){
+    noteGrid.addEventListener('click', async e => {
+      const btn = e.target.closest('.note-del');
+      if(!btn) return;
+
+      const noteEl = btn.closest('.note, .voice-note');
+      const noteId = noteEl.dataset.id;
+      if(!noteId) return;
+
+      if(!confirm('Are you sure you want to delete this note?')) return;
+
+      btn.disabled = true;
+      try {
+        const res = await api.del(`/notes/${noteId}`);
+        if(res.ok){
+          // Update memory data
+          const activeItem = $('.case-item.active');
+          if(activeItem){
+            let notes = JSON.parse(activeItem.dataset.notes || '[]');
+            notes = notes.filter(n => n.id != noteId);
+            activeItem.dataset.notes = JSON.stringify(notes);
+            renderCase(activeItem);
+          }
+          toast('Note deleted', 'info');
+        } else {
+          throw new Error(res.error || 'Failed to delete note');
+        }
+      } catch (err) {
+        console.error('Note delete error:', err);
+        alert(err.message);
+        btn.disabled = false;
+      }
+    });
+  }
+
   // ---------- Delete Document ---------- //
   if(docList){
     docList.addEventListener('click', e => {
@@ -341,11 +422,11 @@
     wrap.className = `msg ${role}`;
     const av = document.createElement('div');
     av.className = 'av';
-    av.textContent = role === 'lawyer' ? userInitials : 'AI';
+    av.textContent = (role === 'user' || role === 'lawyer') ? userInitials : 'AI';
     const bub = document.createElement('div');
     bub.className = 'bubble';
 
-    if(role === 'lawyer'){
+    if(role === 'user' || role === 'lawyer'){
       bub.textContent = content;
     } else if(judgments && judgments.length){
       bub.innerHTML = `
@@ -658,7 +739,7 @@
       e.preventDefault();
       const txt = chatInput.value.trim();
       if(!txt) return;
-      appendMessage({ role:'lawyer', content: txt });
+      appendMessage({ role:'user', content: txt });
       chatInput.value = '';
       sendToAI(txt);
     });

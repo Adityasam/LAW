@@ -84,24 +84,6 @@
           {% endfor %}
         </div>
       </div>
-
-      <div class="card">
-        <div class="ch">
-          <h3>Assigned Counsel</h3>
-          <span class="sub">Lead</span>
-        </div>
-        <div class="lawyer">
-          <div class="av" id="lawyer-initials">
-            {{ (active_case.assigned_lawyer or active_case.lawyer or user.name)[:2]|upper }}
-          </div>
-          <div class="info">
-            <div class="n" id="lawyer-name">{{ active_case.assigned_lawyer or active_case.lawyer or user.name }}</div>
-            <div class="r" id="lawyer-chamber">
-              {{ user.chamber if user and active_case.assigned_lawyer == user.name else 'Senior Counsel' }}
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Documents -->
@@ -150,10 +132,27 @@
 
     <!-- Notes -->
     <div class="tab-pane" data-pane="notes">
+      <div class="card" style="margin-bottom: 20px; background: var(--surface-2);">
+        <div class="ch">
+          <h3>Add New Note</h3>
+          <span class="sub">Personal memos & observations</span>
+        </div>
+        <form id="add-note-form" style="display: flex; flex-direction: column; gap: 12px;">
+          <input type="text" id="note-title" placeholder="Note Title (optional)" style="background: var(--bg); border: 1px solid var(--border-2); padding: 10px; border-radius: 6px; color: var(--text);">
+          <textarea id="note-content" placeholder="Enter your note here..." required style="background: var(--bg); border: 1px solid var(--border-2); padding: 10px; border-radius: 6px; color: var(--text); min-height: 80px; resize: vertical;"></textarea>
+          <div style="display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary" style="padding: 8px 20px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;"><path d="M12 5v14M5 12h14"/></svg>
+              Save Note
+            </button>
+          </div>
+        </form>
+      </div>
+
       <div class="note-grid" id="note-grid">
         {% for n in active_case.notes or [] %}
           {% if n.type == 'voice' or n.note_type == 'voice' %}
-          <div class="voice-note">
+          <div class="voice-note" data-id="{{ n.id }}">
             <button class="play" title="Play">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7V5z"/></svg>
             </button>
@@ -164,12 +163,20 @@
               </div> -->
             </div>
             <div class="vdur">{{ n.duration or '00:00' }}</div>
+            <button class="note-del" title="Delete Note">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+            </button>
           </div>
           {% else %}
-          <div class="note">
+          <div class="note" data-id="{{ n.id }}">
             <div class="nt">
               <span class="ttl">{{ n.title or 'Note' }}</span>
-              <span class="tag">Note</span>
+              <div style="display: flex; align-items: center;">
+                <span class="tag">Note</span>
+                <button class="note-del" title="Delete Note">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+                </button>
+              </div>
             </div>
             <p>{{ n.content }}</p>
           </div>

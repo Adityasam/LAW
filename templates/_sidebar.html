@@ -30,7 +30,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/></svg>
       Documents
     </a>
-    <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="#">
+    <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="{{ url_for('settings_page') }}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1A1.7 1.7 0 009 19.4a1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1A1.7 1.7 0 004.6 9a1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
       Settings
     </a>
@@ -57,7 +57,6 @@
            data-facts="{{ c.facts or '' }}"
            data-ai_summary="{{ c.ai_summary or '' }}"
            data-analysis_status="{{ c.analysis_status or 'pending' }}"
-           data-lawyer="{{ c.assigned_lawyer or c.lawyer or '' }}"
            data-documents='{{ c.documents|tojson }}'
            data-notes='{{ c.notes|tojson }}'
            onclick="window.location.href='/case/{{ c.id }}'">
@@ -76,4 +75,17 @@
     </div>
   </div>
   {% endif %}
+
+  <div class="sidebar-footer">
+    <div class="user-profile">
+      <div class="user-avatar">{{ user.avatar_initials }}</div>
+      <div class="user-info">
+        <div class="user-name">{{ user.name }}</div>
+        <div class="user-role">Firm Account</div>
+      </div>
+    </div>
+    <a href="{{ url_for('logout') }}" class="logout-btn" title="Logout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+    </a>
+  </div>
 </aside>

@@ -122,7 +122,6 @@
         if(submit){ submit.disabled = true; submit.textContent = 'Creating…'; }
 
         const payload = {
-          lawyer_id:   1, // Default to first lawyer for now
           title:       $('#f-title').value.trim(),
           client_name: $('#f-client').value.trim(),
           case_type:   $('#f-type').value,

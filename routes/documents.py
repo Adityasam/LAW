@@ -8,7 +8,7 @@ import uuid
 import threading
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request, send_from_directory
+from flask import Blueprint, current_app, jsonify, request, send_from_directory, session
 from werkzeug.utils import secure_filename
 
 from models import Document, db
@@ -16,6 +16,16 @@ from services.doc_processor import process_document
 from chunker import add_to_vector_db
 
 documents_bp = Blueprint("documents", __name__)
+
+
+def login_required_api(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'firm_id' not in session:
+            return jsonify({"ok": False, "error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 def _allowed(filename: str) -> bool:
@@ -65,67 +75,68 @@ def process_document_background(app_instance, doc_id, file_path, original_name):
 
 
 @documents_bp.post("/cases/<int:case_id>/documents")
+@login_required_api
 def upload_document(case_id: int):
     """
     POST /cases/<id>/documents
-        multipart/form-data with a `file` field.
-        Saves the upload under UPLOAD_FOLDER and records metadata.
+        multipart/form-data with one or more `file` fields.
+        Saves the uploads under UPLOAD_FOLDER and records metadata.
     """
     from models import Case  # local import to avoid circulars
-    case = db.session.get(Case, case_id)
+    case = db.session.query(Case).filter_by(id=case_id, firm_id=session['firm_id']).first()
     if not case:
         return jsonify({"ok": False, "error": "Case not found"}), 404
 
     if "file" not in request.files:
         return jsonify({"ok": False, "error": "No file part in request"}), 400
 
-    f = request.files["file"]
-    if not f or f.filename == "":
-        return jsonify({"ok": False, "error": "No file selected"}), 400
-    if not _allowed(f.filename):
-        return jsonify({
-            "ok": False,
-            "error": "File type not allowed",
-        }), 400
+    files = request.files.getlist("file")
+    uploaded_docs = []
 
-    upload_dir = Path(current_app.config["UPLOAD_FOLDER"])
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    for f in files:
+        if not f or f.filename == "":
+            continue
+        if not _allowed(f.filename):
+            continue
 
-    original = secure_filename(f.filename)
-    ext = original.rsplit(".", 1)[1].lower() if "." in original else ""
-    stored = f"{uuid.uuid4().hex}.{ext}" if ext else uuid.uuid4().hex
-    target = upload_dir / stored
-    f.save(target)
+        upload_dir = Path(current_app.config["UPLOAD_FOLDER"])
+        upload_dir.mkdir(parents=True, exist_ok=True)
 
-    size = target.stat().st_size
+        original = secure_filename(f.filename)
+        ext = original.rsplit(".", 1)[1].lower() if "." in original else ""
+        stored = f"{uuid.uuid4().hex}.{ext}" if ext else uuid.uuid4().hex
+        target = upload_dir / stored
+        f.save(target)
 
-    # 1. Create document record immediately (status: processing)
-    doc = Document(
-        case_id        = case_id,
-        filename       = stored,
-        original_name  = original,
-        file_type      = ext,
-        file_size      = size,
-        extracted_text = "",
-        summary        = "",
-        status         = "processing"
-    )
-    db.session.add(doc)
-    db.session.commit()
+        size = target.stat().st_size
 
-    # 2. Trigger background processing
-    app_instance = current_app._get_current_object()
-    thread = threading.Thread(
-        target=process_document_background, 
-        args=(app_instance, doc.id, str(target), original)
-    )
-    thread.start()
+        # 1. Create document record immediately (status: processing)
+        doc = Document(
+            case_id        = case_id,
+            filename       = stored,
+            original_name  = original,
+            file_type      = ext,
+            file_size      = size,
+            extracted_text = "",
+            summary        = "",
+            status         = "processing"
+        )
+        db.session.add(doc)
+        db.session.commit()
 
-    # Return immediately to the user
+        # 2. Trigger background processing (Gemini + Vector DB)
+        app_instance = current_app._get_current_object()
+        thread = threading.Thread(
+            target=process_document_background, 
+            args=(app_instance, doc.id, str(target), original)
+        )
+        thread.start()
+        uploaded_docs.append(doc.to_dict())
+
+    # Return updated document list
     docs = Document.query.filter_by(case_id=case_id).all()
     return jsonify({
         "ok": True, 
-        "document": doc.to_dict(),
         "documents": [d.to_dict() for d in docs]
     }), 201
 
@@ -137,9 +148,11 @@ def serve_upload(filename: str):
 
 
 @documents_bp.delete("/documents/<int:doc_id>")
+@login_required_api
 def delete_document(doc_id: int):
-    """DELETE /documents/<id> — removes the DB row and the file on disk."""
-    doc = db.session.query(Document).get(doc_id)
+    """DELETE /documents/<id> — removes from disk and DB."""
+    from models import Case  # local import to avoid circulars
+    doc = db.session.query(Document).join(Case).filter(Document.id == doc_id, Case.firm_id == session['firm_id']).first()
     if not doc:
         return jsonify({"ok": False, "error": "Document not found"}), 404
 

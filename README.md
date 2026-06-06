@@ -1,63 +1,66 @@
 # LegalMind — Legal Research Workspace
 
-AI-powered workspace for Indian lawyers. Manage cases, analyze facts, and research judgments with RAG-based assistance.
+**LegalMind** is a professional, AI-powered workspace designed for Indian lawyers to manage litigation matters, automate legal research, and analyze case documents using advanced Retrieval-Augmented Generation (RAG).
 
-## Features
+## Key Features
 
-- **Case Management**: Organize criminal and civil matters with client details, hearing dates, and notes.
-- **Entity Extraction**: Automatically extract sections (BNS/IPC), parties, and courts from case facts using Gemini 3.1 Flash.
-- **Smart Research**: Instant retrieval of relevant judgments via Indian Kanoon integration.
-- **RAG Chat**: Context-aware AI assistant that answers questions based strictly on retrieved judgment snippets and specific case facts.
-- **Document Vault**: Upload and manage FIRs, charge sheets, and applications.
-- **Voice Notes**: Capture quick memos with a visual waveform interface.
+- **Document Intelligence (OCR & Summarization)**: Upload PDFs or images (FIRs, charge sheets, evidence). Gemini automatically performs OCR and generates professional legal summaries in structured Markdown.
+- **Asynchronous Background Processing**: Long-running AI tasks (summarization, Kanoon research, vector indexing) run on background workers, ensuring a smooth, non-blocking UI experience.
+- **Advanced RAG Chat**: A dedicated AI Legal Assistant that uses:
+    - **Case Facts**: Your manually entered matter details.
+    - **AI Case Brief**: Automatically generated summary of facts.
+    - **Document Summaries**: Context from all uploaded evidence.
+    - **Live Research**: Top-3 relevant judgments fetched from **Indian Kanoon**.
+- **Unified Documents Repository**: A centralized view of every document across all active matters, with instant AI-powered search and summary previews.
+- **Active Matters Management**: Track Criminal and Civil cases with hearing dates, sections (BNS/IPC/BSA), and counsel assignments.
+- **Persistent Vector DB**: Case-specific JSON-based vector stores that index facts, judgment HTML, and document text for precise retrieval during chat.
 
 ## Tech Stack
 
 - **Backend**: Python 3.9+, Flask, SQLAlchemy (SQLite)
-- **AI/LLM**: Google Gemini 3.1 Flash (via Vertex AI SDK)
-- **Frontend**: Modern CSS3 (CSS Variables, Flexbox/Grid), Vanilla JS
-- **Research**: Indian Kanoon API
+- **AI/LLM**: Google Gemini 1.5 & 3.1 Flash (Multi-modal for OCR + RAG)
+- **Vector Storage**: Custom JSON-based persistent indexing (in `data/vectors/`)
+- **Frontend**: Vanilla JS (Modular), Modern CSS3, Jinja2 Templates, Marked.js (Markdown rendering)
+- **APIs**: Indian Kanoon API integration
 
 ## Getting Started
 
-### 1. Prerequisites
-- Python 3.9 or higher
-- Google Gemini API Key
-
-### 2. Installation
+### 1. Installation
 ```bash
-# Clone repository
+# Clone the repository
 git clone <repo-url>
 cd LAW
 
-# Install dependencies
+# Create virtual environment and install dependencies
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
 pip install -r requirements.txt
 ```
 
-### 3. Configuration
-Create a `.env` file with your Gemini API key:
+### 2. Configuration
+Create a `.env` file in the root directory:
 ```bash
-GEMINI_API_KEY=your-api-key-here
-INDIAN_KANOON_API_KEY=your-kanoon-key-here
+SECRET_KEY=your-secret-key
+GEMINI_API_KEY=your-gemini-api-key
+INDIAN_KANOON_API_KEY=your-kanoon-api-key
 GEMINI_MODEL_NAME=models/gemini-3.1-flash-lite-preview
 ```
 
-### 4. Run Application
+### 3. Running the App
 ```bash
 python run.py
 ```
-Access the dashboard at `http://localhost:5000`.
+Visit `http://localhost:5000` to access your workspace.
 
-## Project Structure
+## Architecture
 
-- `app.py`: Main application entry and API routes.
-- `models.py`: Database schema (Cases, Documents, Chat, Notes).
-- `keyExtractor.py`: Entity extraction logic.
-- `advisor.py`: Gemini RAG and streaming chat logic.
-- `chunker.py`: Document cleaning, chunking, and persistent vector storage.
-- `services/`: External API integrations (Kanoon).
-- `static/`: Modern UI assets (CSS/JS).
-- `templates/`: Jinja2 HTML templates.
+- `app.py`: Application factory and core API endpoints.
+- `models.py`: Database schema for Cases, Documents, Judgments, and Chat history.
+- `routes/`: Modular blueprints for Cases, Documents, and Chat logic.
+- `services/doc_processor.py`: Multi-modal Gemini integration for OCR and document analysis.
+- `advisor.py`: RAG orchestration and streaming chat response generation.
+- `chunker.py`: Persistent vector storage, text cleaning, and overlap-based chunking.
+- `keyExtractor.py`: Legal entity extraction and automated case brief generation.
 
-## License
-Proprietary / Internal Use
+## Project Status
+**LegalMind v1.0** — Robust document management and automated research pipeline implemented.

@@ -6,7 +6,7 @@
 from datetime import datetime
 from typing import Optional
 import threading
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, session
 
 from models import Case, db, Judgment
 from keyExtractor import extract_case_entities
@@ -14,6 +14,16 @@ from chunker import create_vector_db, vector_db_exists
 from advisor import get_legal_advice, fetch_doc_by_id, client
 
 cases_bp = Blueprint("cases", __name__, url_prefix="/cases")
+
+
+def login_required_api(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'firm_id' not in session:
+            return jsonify({"ok": False, "error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 def _parse_date(s: Optional[str]):
@@ -40,8 +50,14 @@ def process_case_background(app_instance, case_id, facts):
             analysis = extract_case_entities(facts)
             
             # 2. Research Judgments (Indian Kanoon)
-            research_data = get_legal_advice(facts, analysis)
-            judgments_meta = research_data.get("judgments", [])[:3] # Take latest 3
+            # Fetch firm_id from case for research settings
+            firm_id = None
+            case = db.session.query(Case).get(case_id)
+            if case:
+                firm_id = case.firm_id
+
+            research_data = get_legal_advice(facts, analysis, firm_id=firm_id)
+            judgments_meta = research_data.get("judgments", [])
 
             # 3. Update Case record with summary and sections
             case = db.session.query(Case).get(case_id)
@@ -103,9 +119,8 @@ def process_case_background(app_instance, case_id, facts):
             
             db.session.commit()
 
-            # 5. Create Vector DB (Case Facts + Judgment HTML)
-            if not vector_db_exists(case_id):
-                create_vector_db(case_id, judgments_to_index, facts)
+            # 5. Create/Update Vector DB (Case Facts + Judgment HTML)
+            create_vector_db(case_id, judgments_to_index, facts)
             
             # Final status update
             case = db.session.query(Case).get(case_id)
@@ -141,11 +156,13 @@ def get_case(case_id: int):
 
 
 @cases_bp.post("/")
+@login_required_api
 def create_case():
     """POST /cases — create a new case from a JSON body."""
     payload = request.get_json(silent=True) or {}
+    firm_id = session['firm_id']
 
-    required = ("lawyer_id", "title", "client_name", "case_type")
+    required = ("title", "client_name", "case_type")
     missing = [f for f in required if not payload.get(f)]
     if missing:
         return jsonify({
@@ -160,7 +177,7 @@ def create_case():
         sections_str = str(sections)
 
     case = Case(
-        lawyer_id    = int(payload["lawyer_id"]),
+        firm_id      = firm_id,
         title        = payload["title"],
         client_name  = payload["client_name"],
         case_type    = payload["case_type"],
@@ -186,9 +203,10 @@ def create_case():
 
 
 @cases_bp.put("/<int:case_id>")
+@login_required_api
 def update_case(case_id: int):
     """PUT /cases/<id> — partial update; currently supports status & hearing_date."""
-    case = db.session.get(Case, case_id)
+    case = db.session.query(Case).filter_by(id=case_id, firm_id=session['firm_id']).first()
     if not case:
         return jsonify({"ok": False, "error": "Case not found"}), 404
 
@@ -220,9 +238,10 @@ def update_case(case_id: int):
 
 
 @cases_bp.delete("/<int:case_id>")
+@login_required_api
 def delete_case(case_id: int):
     """DELETE /cases/<id> — cascade removes documents, notes, messages."""
-    case = db.session.get(Case, case_id)
+    case = db.session.query(Case).filter_by(id=case_id, firm_id=session['firm_id']).first()
     if not case:
         return jsonify({"ok": False, "error": "Case not found"}), 404
     db.session.delete(case)

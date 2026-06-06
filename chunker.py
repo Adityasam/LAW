@@ -43,24 +43,41 @@ def vector_db_exists(case_id):
 
 def create_vector_db(case_id, judgments_data, case_facts=None):
     """
-    Creates persistent JSON storage of chunks from judgments and case facts.
+    Creates or updates persistent JSON storage of chunks from judgments and case facts.
     """
+    path = _get_storage_path(case_id)
     all_data = []
     
-    # 1. Index case facts first
+    # Load existing data if it exists (e.g. from previously uploaded documents)
+    if path.exists():
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                all_data = json.load(f)
+        except Exception as e:
+            print(f"Error loading existing vector data for case {case_id}: {e}")
+    
+    # 1. Index case facts
     if case_facts:
-        fact_chunks = chunk_text(case_facts)
-        for chunk in fact_chunks:
-            all_data.append({
-                "text": chunk,
-                "metadata": {
-                    "title": "Initial Case Facts",
-                    "type": "case_facts"
-                }
-            })
+        # Check if we already have case facts to avoid duplication
+        has_facts = any(item.get("metadata", {}).get("type") == "case_facts" for item in all_data)
+        if not has_facts:
+            fact_chunks = chunk_text(case_facts)
+            for chunk in fact_chunks:
+                all_data.append({
+                    "text": chunk,
+                    "metadata": {
+                        "title": "Initial Case Facts",
+                        "type": "case_facts"
+                    }
+                })
 
     # 2. Index judgments
     for j in judgments_data:
+        doc_id = j.get("doc_id")
+        # Check if this judgment is already indexed
+        if doc_id and any(item.get("metadata", {}).get("doc_id") == str(doc_id) for item in all_data):
+            continue
+
         raw_html = j.get("doc_html", "")
         text = clean_html(raw_html)
         chunks = chunk_text(text)
@@ -70,7 +87,7 @@ def create_vector_db(case_id, judgments_data, case_facts=None):
             "court": j.get("court"),
             "date": j.get("date"),
             "url": j.get("url"),
-            "doc_id": j.get("doc_id")
+            "doc_id": str(doc_id) if doc_id else None
         }
         
         for chunk in chunks:
@@ -79,11 +96,10 @@ def create_vector_db(case_id, judgments_data, case_facts=None):
                 "metadata": metadata
             })
     
-    path = _get_storage_path(case_id)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(all_data, f)
         
-    print(f"Created {len(all_data)} chunks with metadata for case {case_id}. Saved to {path}.")
+    print(f"Updated vector DB for case {case_id}: total {len(all_data)} chunks. Saved to {path}.")
     return True
 
 def add_to_vector_db(case_id, text, metadata):
@@ -93,9 +109,18 @@ def add_to_vector_db(case_id, text, metadata):
     path = _get_storage_path(case_id)
     all_data = []
     if path.exists():
-        with open(path, "r", encoding="utf-8") as f:
-            all_data = json.load(f)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                all_data = json.load(f)
+        except Exception as e:
+            print(f"Error loading existing vector data for case {case_id}: {e}")
     
+    # Simple deduplication check for documents based on filename
+    filename = metadata.get("filename")
+    if filename and any(item.get("metadata", {}).get("filename") == filename for item in all_data):
+        print(f"Document {filename} already indexed for case {case_id}. Skipping.")
+        return True
+
     chunks = chunk_text(text)
     for chunk in chunks:
         all_data.append({

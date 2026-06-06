@@ -12,44 +12,36 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
-class Lawyer(db.Model):
-    """A practising advocate. The owner/assignee of one or more cases."""
-
-    __tablename__ = "lawyers"
+class Firm(db.Model):
+    """A Law Firm or independent practitioner account."""
+    __tablename__ = "firms"
 
     id            = db.Column(db.Integer, primary_key=True)
     name          = db.Column(db.String(120), nullable=False)
+    username      = db.Column(db.String(80), unique=True, nullable=False, index=True)
     email         = db.Column(db.String(180), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
-    chamber       = db.Column(db.String(200))
-    avatar_initials = db.Column(db.String(8))
     created_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-    # A lawyer can have many cases.
-    cases = db.relationship(
-        "Case",
-        backref="lawyer",
-        lazy="select",
-        cascade="all, delete-orphan",
-    )
+    # Relationships
+    cases   = db.relationship("Case", backref="firm", lazy="select", cascade="all, delete-orphan")
+    settings = db.relationship("Setting", backref="firm", uselist=False, lazy="select", cascade="all, delete-orphan")
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "name": self.name,
+            "username": self.username,
             "email": self.email,
-            "chamber": self.chamber,
-            "avatar_initials": self.avatar_initials,
         }
 
-
 class Case(db.Model):
-    """A litigation matter handled by a lawyer."""
+    """A litigation matter handled by a firm."""
 
     __tablename__ = "cases"
 
     id           = db.Column(db.Integer, primary_key=True)
-    lawyer_id    = db.Column(db.Integer, db.ForeignKey("lawyers.id"), nullable=False, index=True)
+    firm_id      = db.Column(db.Integer, db.ForeignKey("firms.id"), nullable=False, index=True)
     title        = db.Column(db.String(200), nullable=False)
     client_name  = db.Column(db.String(120), nullable=False)
     case_type    = db.Column(db.String(40), nullable=False)   # Criminal / Civil
@@ -79,7 +71,7 @@ class Case(db.Model):
     def to_dict(self, include_relations: bool = False) -> dict:
         data = {
             "id": self.id,
-            "lawyer_id": self.lawyer_id,
+            "firm_id": self.firm_id,
             "title": self.title,
             "client_name": self.client_name,
             "case_type": self.case_type,
@@ -97,6 +89,7 @@ class Case(db.Model):
             data["notes"]     = [n.to_dict() for n in self.notes]
             data["judgments"] = [j.to_dict() for j in self.judgments]
         return data
+
 
 
 class Document(db.Model):
@@ -161,7 +154,7 @@ class ChatMessage(db.Model):
 
     id         = db.Column(db.Integer, primary_key=True)
     case_id    = db.Column(db.Integer, db.ForeignKey("cases.id"), nullable=False, index=True)
-    role       = db.Column(db.String(20), nullable=False)  # 'lawyer' | 'ai'
+    role       = db.Column(db.String(20), nullable=False)  # 'user' | 'ai'
     content    = db.Column(db.Text, nullable=False)
     citations  = db.Column(db.Text, default="")            # JSON-encoded list of citations
     sections   = db.Column(db.Text, default="")            # JSON-encoded list of section tags
@@ -186,6 +179,47 @@ class ChatMessage(db.Model):
             "sections": sections,
             "created_at": self.created_at.isoformat(),
         }
+
+
+class Setting(db.Model):
+    """Global and Firm-specific settings for the LegalMind workspace."""
+
+    __tablename__ = "settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    firm_id = db.Column(db.Integer, db.ForeignKey("firms.id"), unique=True, nullable=False)
+
+    # Firm Details
+    firm_name = db.Column(db.String(200))
+    lawyer_name = db.Column(db.String(200))
+    address = db.Column(db.Text)
+    default_court = db.Column(db.String(200))
+
+    # AI Options
+    ai_language = db.Column(db.String(20), default="English") # English / Hindi
+    include_ipc_equivalent = db.Column(db.Boolean, default=True)
+    max_judgments = db.Column(db.Integer, default=3) # 3, 6, 9
+
+    def to_dict(self) -> dict:
+        return {
+            "firm_name": self.firm_name or "",
+            "lawyer_name": self.lawyer_name or "",
+            "address": self.address or "",
+            "default_court": self.default_court or "",
+            "ai_language": self.ai_language,
+            "include_ipc_equivalent": self.include_ipc_equivalent,
+            "max_judgments": self.max_judgments
+        }
+
+
+def get_firm_settings(firm_id: int) -> Setting:
+    """Fetch or create default settings for a specific firm."""
+    s = Setting.query.filter_by(firm_id=firm_id).first()
+    if not s:
+        s = Setting(firm_id=firm_id)
+        db.session.add(s)
+        db.session.commit()
+    return s
 
 
 class Judgment(db.Model):
