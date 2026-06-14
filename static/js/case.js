@@ -560,7 +560,7 @@
   }
 
   // ---------- Chat ---------- //
-  function appendMessage({role, content, judgments}){
+  function appendMessage({role, content, judgments, showActions = false}){
     const wrap = document.createElement('div');
     wrap.className = `msg ${role}`;
     const av = document.createElement('div');
@@ -569,11 +569,23 @@
     const bub = document.createElement('div');
     bub.className = 'bubble';
 
+    let cleanContent = content || '';
+    let actions = [];
+    if (role !== 'user' && role !== 'lawyer') {
+      const actionMatch = cleanContent.match(/ACTIONS:\s*(\[.*?\])\s*$/s);
+      if (actionMatch) {
+        try {
+          actions = JSON.parse(actionMatch[1]);
+          cleanContent = cleanContent.replace(/ACTIONS:\s*\[.*?\]\s*$/s, '').trim();
+        } catch(e) { console.error('Pill parse error', e); }
+      }
+    }
+
     if(role === 'user' || role === 'lawyer'){
-      bub.textContent = content;
+      bub.textContent = cleanContent;
     } else if(judgments && judgments.length){
       bub.innerHTML = `
-        <div style="margin-bottom:6px;">${marked.parse(content || 'Related judgments found:')}</div>
+        <div style="margin-bottom:6px;">${marked.parse(cleanContent || 'Related judgments found:')}</div>
         <div class="judgments-list">
           ${judgments.map(j => `
             <div class="judgment-card" data-docid="${j.doc_id}" data-title="${escapeHTML(j.title)}">
@@ -587,12 +599,35 @@
         </div>
       `;
     } else {
-      bub.innerHTML = marked.parse(content || '');
+      bub.innerHTML = marked.parse(cleanContent || '');
     }
 
     wrap.appendChild(av);
     wrap.appendChild(bub);
     chatBody.appendChild(wrap);
+
+    if(showActions && actions.length){
+      const actionWrap = document.createElement('div');
+      actionWrap.className = 'msg-actions';
+      actionWrap.innerHTML = actions.map(a => `
+        <button class="pill-action" data-prompt="${escapeHTML(a.prompt)}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          ${escapeHTML(a.label)}
+        </button>
+      `).join('');
+      
+      actionWrap.addEventListener('click', e => {
+        const pill = e.target.closest('.pill-action');
+        if(!pill) return;
+        const prompt = pill.dataset.prompt;
+        chatInput.value = prompt;
+        chatForm && chatForm.requestSubmit();
+        actionWrap.remove();
+      });
+      
+      wrap.appendChild(actionWrap);
+    }
+
     chatBody.scrollTop = chatBody.scrollHeight;
   }
 
@@ -662,8 +697,9 @@
        .then(data => {
          if(data.ok){
            if(data.messages){
-             data.messages.forEach(m => {
-               appendMessage({ role: m.role, content: m.content });
+             data.messages.forEach((m, idx) => {
+               const isLast = idx === data.messages.length - 1;
+               appendMessage({ role: m.role, content: m.content, showActions: isLast });
              });
            }
            
