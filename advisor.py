@@ -76,14 +76,13 @@ You must respond exactly as a senior advocate would brief a junior — specific,
 tactical, no fluff.
 
 ANSWER STYLE:
-- Never give textbook definitions — the lawyer knows the law
-- Always give tactical advice — what to argue, how to argue, what to watch for
-- When asked about hearing preparation, give a specific game plan for THIS case
-- Point out what the prosecution WILL argue and how to counter it
-- If facts are weak, say so honestly and suggest how to handle it
-- Use Indian legal terminology naturally (vakalatnama, remand, anticipatory bail, 
-  chargesheet, committal, etc.)
-- Short sharp sentences. No lengthy explanations unless asked.
+- Be extremely precise. Answer ONLY what the user asks.
+- If asked a factual question, give a direct factual answer.
+- Do NOT provide "hearing preparation", "legal position", or "key arguments" UNLESS specifically requested for that message.
+- If the question is simple, the answer must be simple (one sentence if possible).
+- Never offer unsolicited tactical advice or game plans.
+- Short sharp sentences. No lengthy explanations.
+- Prioritize bullet points over paragraphs.
 
 STRICT CONSTRAINTS:
 - Base every answer on the case context provided — not generic law
@@ -101,6 +100,13 @@ When asked to prepare for a hearing, always structure as:
 4. What to watch for from the judge — bail matters vs regular hearing tone differs
 5. Documents to have ready
 6. What NOT to argue — points that will hurt more than help
+
+FOLLOW-UP ACTIONS:
+At the very end of your response, if there are any logical next steps, provide them in this JSON format strictly:
+ACTIONS: [{"label": "Short Action Name", "prompt": "The actual full prompt to send when clicked"}]
+Keep labels under 4 words. Prompts should be specific to the case and continue the thread naturally.
+Example: ACTIONS: [{"label": "Research Bail Precedents", "prompt": "What are the latest Supreme Court judgments on bail in cases with similar facts?"}]
+If no actions needed, omit the ACTIONS part completely.
 """
 
 
@@ -241,9 +247,9 @@ def get_legal_advice(case_description: str, extracted: dict, firm_id: int = None
         "judgments": judgments      # Return these so UI can show clickable links
     }
 
-def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: list[dict] = None, case_facts: str = None, doc_summaries: list[dict] = None, judgment_summaries: list[dict] = None, case_notes: list[dict] = None, language: str = "English"):
+def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: list[dict] = None, case_facts: str = None, doc_summaries: list[dict] = None, judgment_summaries: list[dict] = None, case_notes: list[dict] = None, language: str = "English", hearing_records: list[dict] = None):
     """
-    Streams a response from Gemini using RAG chunks, chat history, case facts, doc summaries, judgment summaries, and case notes.
+    Streams a response from Gemini using RAG chunks, chat history, case facts, doc summaries, judgment summaries, case notes, and hearing history.
     """
     context_parts = []
     for i, item in enumerate(relevant_chunks):
@@ -277,7 +283,15 @@ def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: l
             notes_context += f"Note {i+1} ({n.get('title')}): {n.get('content')}\n"
         notes_context += "\n"
 
-    # 5. Build Contents (History + Current Prompt)
+    # 5. Format Hearing History
+    hearings_context = ""
+    if hearing_records:
+        hearings_context = "PAST HEARING HISTORY & COURT ORDERS:\n"
+        for i, h in enumerate(hearing_records):
+            hearings_context += f"Hearing on {h.get('date')}: {h.get('notes')}\n"
+        hearings_context += "\n"
+
+    # 6. Build Contents (History + Current Prompt)
     contents = []
     if history:
         for msg in history:
@@ -292,9 +306,9 @@ def stream_legal_chat(user_message: str, relevant_chunks: list[dict], history: l
     if language == "Hindi":
         lang_instr += " Use Devanagari script for Hindi."
         
-    instructions = f"\nIMPORTANT: Heavily rely on the UPLOADED DOCUMENT SUMMARIES and CASE NOTES below for specific case details (FIR contents, charge sheet points, specific observations, etc.). Incorporate these into your advice.{lang_instr}\n\n"
+    instructions = f"\nIMPORTANT: Heavily rely on the UPLOADED DOCUMENT SUMMARIES, CASE NOTES, and HEARING HISTORY below for specific case details (FIR contents, court orders, specific observations, etc.). Incorporate these into your advice.{lang_instr}\n\n"
     
-    full_prompt = f"{facts_context}{doc_context}{judgment_context}{notes_context}{instructions}DETAILED SNIPPETS FROM JUDGMENTS:\n{context}\n\nUSER QUESTION: {user_message}"
+    full_prompt = f"{facts_context}{doc_context}{judgment_context}{notes_context}{hearings_context}{instructions}DETAILED SNIPPETS FROM JUDGMENTS:\n{context}\n\nUSER QUESTION: {user_message}"
     contents.append(types.Content(role="user", parts=[types.Part(text=full_prompt)]))
 
     response = client.models.generate_content_stream(

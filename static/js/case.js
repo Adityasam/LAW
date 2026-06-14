@@ -48,7 +48,8 @@
       ai_summary:   el.getAttribute('data-ai_summary'),
       analysis_status: el.getAttribute('data-analysis_status') || 'pending',
       documents:    parseJson(el.dataset.documents),
-      notes:        parseJson(el.dataset.notes)
+      notes:        parseJson(el.dataset.notes),
+      hearings:     parseJson(el.dataset.hearings || '[]')
     };
     data.active = d; // Update global state
     
@@ -154,6 +155,45 @@
             <p>${escapeHTML(n.content)}</p>
           </div>`;
       }).join('') || '<p style="color:var(--muted);font-size:12.5px;">No notes for this case.</p>';
+    }
+
+    // Hearings
+    const hearingListEl = $('#hearing-list');
+    if(hearingListEl){
+      hearingListEl.innerHTML = (d.hearings || []).map(h => `
+        <div class="card hearing-item" data-id="${h.id}">
+          <div class="ch" style="margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="padding: 8px; background: var(--gold-soft); color: var(--gold); border-radius: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </div>
+              <h3 style="margin:0;" class="h-date-text">${fmtDate(h.date)}</h3>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="sub">Hearing Record</span>
+              <button class="btn-icon edit-hearing" title="Edit Hearing">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="hearing-content" style="font-size: 13.5px; color: var(--muted-2); line-height: 1.6; white-space: pre-wrap;">${escapeHTML(h.notes || '')}</div>
+          
+          <div class="edit-hearing-form" style="display: none; flex-direction: column; gap: 12px; margin-top: 10px; padding-top: 15px; border-top: 1px solid var(--border-2);">
+            <div class="form-group">
+              <label style="display:block; margin-bottom:6px; font-size:12px; color:var(--muted);">Hearing Date</label>
+              <input type="date" class="edit-h-date" value="${h.date}" required style="width:100%; background: var(--bg); border: 1px solid var(--border-2); padding: 8px; border-radius: 6px; color: var(--text);">
+            </div>
+            <div class="form-group">
+              <label style="display:block; margin-bottom:6px; font-size:12px; color:var(--muted);">Notes & Orders</label>
+              <textarea class="edit-h-notes" placeholder="Update notes..." style="width:100%; background: var(--bg); border: 1px solid var(--border-2); padding: 8px; border-radius: 6px; color: var(--text); min-height: 80px; resize: vertical;">${escapeHTML(h.notes || '')}</textarea>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button class="btn btn-secondary cancel-edit-hearing" style="padding: 6px 15px; font-size: 12px;">Cancel</button>
+              <button class="btn btn-primary save-edit-hearing" style="padding: 6px 15px; font-size: 12px;">Update Record</button>
+            </div>
+          </div>
+        </div>
+      `).join('') || '<p style="color:var(--muted);font-size:12.5px;">No hearings recorded yet.</p>';
     }
 
     // Start polling if there are processing documents or AI summary is missing
@@ -308,6 +348,109 @@
       } catch (err) {
         console.error('Note add error:', err);
         alert(err.message || 'Failed to add note');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    });
+  }
+
+  // ---------- Add Hearing ---------- //
+  const addHearingForm = $('#add-hearing-form');
+  const hearingListContainer = $('#hearing-list');
+
+  if(hearingListContainer){
+    hearingListContainer.addEventListener('click', async e => {
+      // Toggle Edit Mode
+      if(e.target.closest('.edit-hearing')){
+        const card = e.target.closest('.hearing-item');
+        card.querySelector('.hearing-content').style.display = 'none';
+        card.querySelector('.edit-hearing-form').style.display = 'flex';
+        card.querySelector('.edit-hearing').style.display = 'none';
+        return;
+      }
+
+      // Cancel Edit
+      if(e.target.closest('.cancel-edit-hearing')){
+        const card = e.target.closest('.hearing-item');
+        card.querySelector('.hearing-content').style.display = 'block';
+        card.querySelector('.edit-hearing-form').style.display = 'none';
+        card.querySelector('.edit-hearing').style.display = 'flex';
+        return;
+      }
+
+      // Save Edit
+      if(e.target.closest('.save-edit-hearing')){
+        const card = e.target.closest('.hearing-item');
+        const hId = card.dataset.id;
+        const date = card.querySelector('.edit-h-date').value;
+        const notes = card.querySelector('.edit-h-notes').value;
+        
+        const btn = e.target.closest('.save-edit-hearing');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = 'Updating...';
+
+        try {
+          const res = await api.put(`/hearings/${hId}`, { date, notes });
+          if(res.ok){
+            const activeItem = $('.case-item.active');
+            if(activeItem){
+              let hearings = JSON.parse(activeItem.dataset.hearings || '[]');
+              hearings = hearings.map(h => h.id == hId ? res.hearing : h);
+              activeItem.dataset.hearings = JSON.stringify(hearings);
+              renderCase(activeItem);
+            }
+            toast('Hearing updated', 'success');
+          } else {
+            throw new Error(res.error || 'Update failed');
+          }
+        } catch (err) {
+          console.error('Hearing update error:', err);
+          alert(err.message || 'Failed to update hearing');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
+      }
+    });
+  }
+
+  if(addHearingForm){
+    addHearingForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const date = $('#h-date').value;
+      const notes = $('#h-notes').value;
+      if(!date) return;
+
+      const btn = addHearingForm.querySelector('button[type="submit"]');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = 'Saving...';
+
+      try {
+        const res = await api.post(`/cases/${data.active.id}/hearings`, { date, notes });
+        if(res.ok){
+          const activeItem = $('.case-item.active');
+          if(activeItem){
+            const hearings = JSON.parse(activeItem.dataset.hearings || '[]');
+            hearings.unshift(res.hearing); // Add to top
+            activeItem.dataset.hearings = JSON.stringify(hearings);
+            
+            // Also update the header hearing date if it's the latest/relevant
+            activeItem.dataset.hearing = res.hearing.date;
+            
+            renderCase(activeItem);
+          }
+          $('#h-date').value = '';
+          $('#h-notes').value = '';
+          toast('Hearing saved successfully', 'success');
+        } else {
+          throw new Error(res.error || 'Failed to save hearing');
+        }
+      } catch (err) {
+        console.error('Hearing add error:', err);
+        alert(err.message || 'Failed to add hearing');
       } finally {
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -536,6 +679,67 @@
        .catch(err => console.error('History load error:', err));
    }
 
+  // ---------- Hearing Date Inline Edit ---------- //
+  const hearingDateText = $('#case-hearing');
+  const hearingDateInput = $('#case-hearing-input');
+
+  if(hearingDateText && hearingDateInput){
+    hearingDateText.addEventListener('click', () => {
+      hearingDateText.style.display = 'none';
+      hearingDateInput.style.display = 'inline-block';
+      
+      // Values are often in DD MMM YYYY or YYYY-MM-DD
+      // Try to set current date correctly for the input
+      const current = hearingDateText.textContent.trim();
+      if(current && current !== '—'){
+        // If it looks like ISO, use it, else default empty
+        if(/^\d{4}-\d{2}-\d{2}$/.test(current)) hearingDateInput.value = current;
+      }
+      hearingDateInput.focus();
+    });
+
+    hearingDateInput.addEventListener('blur', saveHearingDate);
+    hearingDateInput.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter') saveHearingDate();
+      if(e.key === 'Escape') {
+        hearingDateInput.style.display = 'none';
+        hearingDateText.style.display = 'inline-block';
+      }
+    });
+
+    async function saveHearingDate(){
+      const newDate = hearingDateInput.value;
+      if(!newDate) {
+        hearingDateInput.style.display = 'none';
+        hearingDateText.style.display = 'inline-block';
+        return;
+      }
+
+      const originalText = hearingDateText.textContent;
+      hearingDateText.textContent = 'Updating...';
+      hearingDateInput.style.display = 'none';
+      hearingDateText.style.display = 'inline-block';
+
+      try {
+        const res = await api.put(`/cases/${data.active.id}`, { hearing_date: newDate });
+        if(res.ok){
+          const activeItem = $('.case-item.active');
+          if(activeItem){
+            activeItem.dataset.hearing = newDate;
+            renderCase(activeItem);
+          }
+          toast('Hearing date updated', 'success');
+        } else {
+          throw new Error(res.error || 'Update failed');
+        }
+      } catch (err) {
+        console.error('Update error:', err);
+        hearingDateText.textContent = originalText;
+        alert(err.message || 'Failed to update date');
+      }
+    }
+  }
+
   // ---------- Analyze Button Logic ---------- //
   if(analyzeBtn){
     analyzeBtn.addEventListener('click', () => {
@@ -605,14 +809,50 @@
         function read() {
             return reader.read().then(({ done, value }) => {
                 if (done) {
-                    bub.innerHTML = marked.parse(fullContent);
+                    // Extract actions if present
+                    let cleanContent = fullContent;
+                    let actions = [];
+                    const actionMatch = fullContent.match(/ACTIONS:\s*(\[.*?\])\s*$/s);
+                    if(actionMatch){
+                      try {
+                        actions = JSON.parse(actionMatch[1]);
+                        cleanContent = fullContent.replace(/ACTIONS:\s*\[.*?\]\s*$/s, '').trim();
+                      } catch(e) { console.error('Pill parse error', e); }
+                    }
+
+                    bub.innerHTML = marked.parse(cleanContent);
+                    
+                    if(actions.length){
+                      const actionWrap = document.createElement('div');
+                      actionWrap.className = 'msg-actions';
+                      actionWrap.innerHTML = actions.map(a => `
+                        <button class="pill-action" data-prompt="${escapeHTML(a.prompt)}">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                          ${escapeHTML(a.label)}
+                        </button>
+                      `).join('');
+                      
+                      actionWrap.addEventListener('click', e => {
+                        const pill = e.target.closest('.pill-action');
+                        if(!pill) return;
+                        const prompt = pill.dataset.prompt;
+                        chatInput.value = prompt;
+                        chatForm && chatForm.requestSubmit();
+                        actionWrap.remove(); // Remove after use
+                      });
+                      
+                      wrap.appendChild(actionWrap);
+                    }
+
                     chatBody.scrollTop = chatBody.scrollHeight;
                     return;
                 }
                 const chunk = decoder.decode(value, { stream: true });
                 fullContent += chunk;
-                // Parse markdown during stream for real-time formatting
-                bub.innerHTML = marked.parse(fullContent); 
+                
+                // Real-time preview without the raw JSON block
+                const preview = fullContent.replace(/ACTIONS:\s*\[.*?\]\s*$/s, '').trim();
+                bub.innerHTML = marked.parse(preview); 
                 chatBody.scrollTop = chatBody.scrollHeight;
                 return read();
             });

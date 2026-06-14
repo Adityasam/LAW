@@ -628,7 +628,7 @@
   margin-top: 8px;
 }
 
-.msg{ display:flex; gap:10px; max-width:100%; }
+.msg{ display:flex; flex-wrap:wrap; gap:10px; max-width:100%; }
 .msg .av{
   width:28px; height:28px; border-radius:50%;
   flex-shrink:0;
@@ -746,6 +746,36 @@
   display: flex;
   justify-content: center;
   padding: 4px 0;
+}
+
+/* Follow-up Action Pills */
+.msg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  margin-left: 38px; /* Align with AI bubble */
+  width: 100%; /* Ensure it takes full width below the message */
+  animation: fadeIn 0.4s ease;
+}
+.pill-action {
+  font-size: 11px;
+  color: var(--gold);
+  background: rgba(201, 162, 88, 0.08);
+  border: 1px solid rgba(201, 162, 88, 0.25);
+  padding: 5px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.pill-action:hover {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+  transform: translateY(-1px);
+}
+.pill-action svg {
+  width: 10px; height: 10px; vertical-align: middle; margin-right: 4px;
 }
 .analyze-btn {
   width: 100%;

@@ -67,6 +67,9 @@ class Case(db.Model):
     judgments = db.relationship(
         "Judgment", backref="case", lazy="select", cascade="all, delete-orphan"
     )
+    hearings = db.relationship(
+        "CaseHearing", backref="case", lazy="select", cascade="all, delete-orphan", order_by="CaseHearing.hearing_date.desc()"
+    )
 
     def to_dict(self, include_relations: bool = False) -> dict:
         data = {
@@ -88,6 +91,7 @@ class Case(db.Model):
             data["documents"] = [d.to_dict() for d in self.documents]
             data["notes"]     = [n.to_dict() for n in self.notes]
             data["judgments"] = [j.to_dict() for j in self.judgments]
+            data["hearings"]  = [h.to_dict() for h in self.hearings]
         return data
 
 
@@ -119,6 +123,27 @@ class Document(db.Model):
             "summary": self.summary,
             "status": self.status,
             "uploaded_at": self.uploaded_at.isoformat(),
+        }
+
+
+class CaseHearing(db.Model):
+    """A record of a specific court hearing for a case."""
+
+    __tablename__ = "hearings"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    case_id      = db.Column(db.Integer, db.ForeignKey("cases.id"), nullable=False, index=True)
+    hearing_date = db.Column(db.Date, nullable=False)
+    notes        = db.Column(db.Text)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "case_id": self.case_id,
+            "date": self.hearing_date.isoformat(),
+            "notes": self.notes or "",
+            "created_at": self.created_at.isoformat(),
         }
 
 

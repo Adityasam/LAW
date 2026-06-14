@@ -21,7 +21,7 @@ from flask import Flask, redirect, render_template, url_for, request, session, R
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import Config
-from models import Case, ChatMessage, Document, Note, db, Setting, Judgment, get_firm_settings
+from models import Case, ChatMessage, Document, Note, db, Setting, Judgment, get_firm_settings, CaseHearing
 from routes import cases_bp, chat_bp, documents_bp
 from keyExtractor import extract_case_entities
 from advisor import get_legal_advice, fetch_doc_by_id, stream_legal_chat
@@ -196,6 +196,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         active_case["documents"] = active_case.get("documents") or []
         active_case["notes"]     = active_case.get("notes")     or []
         active_case["sections"]  = active_case.get("sections")  or []
+        active_case["hearings"]  = active_case.get("hearings")  or []
 
         return render_template(
             "case.html",
@@ -303,6 +304,74 @@ def create_app(config_class: type[Config] = Config) -> Flask:
             return {"error": str(e)}, 500
         
         return {"ok": True, "note": new_note.to_dict()}
+
+    @app.post("/cases/<int:case_id>/hearings")
+    @login_required
+    def add_hearing(case_id: int):
+        """POST /cases/<id>/hearings — add a new hearing record to a case."""
+        case = Case.query.filter_by(id=case_id, firm_id=session['firm_id']).first()
+        if not case:
+            return {"error": "Case not found or access denied"}, 404
+        
+        payload = request.get_json(silent=True) or {}
+        date_str = payload.get("date")
+        if not date_str:
+            return {"error": "Date is required"}, 400
+            
+        try:
+            h_date = date.fromisoformat(date_str)
+        except ValueError:
+            return {"error": "Invalid date format"}, 400
+            
+        new_hearing = CaseHearing(
+            case_id=case_id,
+            hearing_date=h_date,
+            notes=payload.get("notes", "")
+        )
+        
+        # Optionally update the case's next hearing date if this hearing is in the future
+        if not case.hearing_date or h_date >= date.today():
+             # If no hearing date or this is upcoming, update it
+             # Simple logic: just update if it's today or later
+             case.hearing_date = h_date
+
+        try:
+            db.session.add(new_hearing)
+            db.session.commit()
+            return {"ok": True, "hearing": new_hearing.to_dict()}
+        except Exception as e:
+            db.session.rollback()
+            return {"error": str(e)}, 500
+
+    @app.put("/hearings/<int:hearing_id>")
+    @login_required
+    def update_hearing(hearing_id: int):
+        """PUT /hearings/<id> — update an existing hearing record."""
+        # Join with Case to verify firm ownership
+        from models import CaseHearing
+        hearing = CaseHearing.query.join(Case).filter(CaseHearing.id == hearing_id, Case.firm_id == session['firm_id']).first()
+        if not hearing:
+            return {"error": "Hearing not found or access denied"}, 404
+        
+        payload = request.get_json(silent=True) or {}
+        date_str = payload.get("date")
+        notes = payload.get("notes")
+        
+        if date_str:
+            try:
+                hearing.hearing_date = date.fromisoformat(date_str)
+            except ValueError:
+                return {"error": "Invalid date format"}, 400
+        
+        if notes is not None:
+            hearing.notes = notes
+            
+        try:
+            db.session.commit()
+            return {"ok": True, "hearing": hearing.to_dict()}
+        except Exception as e:
+            db.session.rollback()
+            return {"error": str(e)}, 500
 
     @app.delete("/notes/<int:note_id>")
     @login_required
@@ -415,10 +484,17 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         # Use AI summary for chat context if available, fallback to raw facts
         case_context = (case.ai_summary if case.ai_summary else (case.facts or ""))
         
-        # 2. Fetch document summaries and notes
+        # Include hearing date and current time in context if exists
+        now = datetime.utcnow().strftime('%d %b %Y, %H:%M UTC')
+        case_context = f"CURRENT DATE/TIME: {now}\n" + case_context
+        if case.hearing_date:
+            case_context = f"NEXT HEARING DATE: {case.hearing_date.strftime('%d %b %Y')}\n" + case_context
+        
+        # 2. Fetch document summaries, notes, and hearings
         doc_summaries = []
         judgment_summaries = []
         case_notes = []
+        hearing_records = []
         if case:
             for doc in case.documents:
                 if doc.summary:
@@ -431,6 +507,9 @@ def create_app(config_class: type[Config] = Config) -> Flask:
             for note in case.notes:
                 case_notes.append({"title": note.title or "Note", "content": note.content})
 
+            for h in case.hearings:
+                hearing_records.append({"date": h.hearing_date.strftime('%d %b %Y'), "notes": h.notes})
+
         # 3. Get RAG context
         relevant = get_relevant_chunks(case_id, user_msg)
         firm_id = session['firm_id']
@@ -439,7 +518,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         
         def generate():
             full_response = ""
-            for text in stream_legal_chat(user_msg, relevant, history, case_context, doc_summaries, judgment_summaries, case_notes, language=ai_lang):
+            for text in stream_legal_chat(user_msg, relevant, history, case_context, doc_summaries, judgment_summaries, case_notes, language=ai_lang, hearing_records=hearing_records):
                 full_response += text
                 yield text
             

@@ -59,6 +59,7 @@
            data-analysis_status="{{ c.analysis_status or 'pending' }}"
            data-documents='{{ c.documents|tojson }}'
            data-notes='{{ c.notes|tojson }}'
+           data-hearings='{{ (c.hearings or [])|tojson }}'
            onclick="window.location.href='/case/{{ c.id }}'">
         <div class="cname">{{ c.name or c.title }}</div>
         <div class="cmeta">
