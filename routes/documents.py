@@ -14,18 +14,9 @@ from werkzeug.utils import secure_filename
 from models import Document, db
 from services.doc_processor import process_document
 from chunker import add_to_vector_db
+from routes._auth import login_required_api
 
 documents_bp = Blueprint("documents", __name__)
-
-
-def login_required_api(f):
-    from functools import wraps
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'firm_id' not in session:
-            return jsonify({"ok": False, "error": "Unauthorized"}), 401
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 def _allowed(filename: str) -> bool:

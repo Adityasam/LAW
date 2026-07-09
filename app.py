@@ -24,8 +24,8 @@ from config import Config
 from models import Case, ChatMessage, Document, Note, db, Setting, Judgment, get_firm_settings, CaseHearing
 from routes import cases_bp, chat_bp, documents_bp
 from keyExtractor import extract_case_entities
-from advisor import get_legal_advice, fetch_doc_by_id, stream_legal_chat
-from chunker import create_vector_db, get_relevant_chunks, vector_db_exists
+from advisor import fetch_doc_by_id, stream_legal_chat
+from chunker import create_vector_db, get_relevant_chunks
 
 
 def create_app(config_class: type[Config] = Config) -> Flask:
@@ -397,11 +397,13 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         return {"ok": True, "db": db_ok, "app": app.config["APP_NAME"]}
 
     @app.post("/seed")
+    @login_required
     def seed():
         """
         Wipe and re-populate the database with dummy data.
         Idempotent — safe to call repeatedly during development.
         """
+        from models import Firm
         with app.app_context():
             # Drop & recreate the schema for a true clean slate.
             db.drop_all()
@@ -411,7 +413,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         return {
             "ok": True,
             "seeded": {
-                "lawyers":   Lawyer.query.count(),
+                "firms":     Firm.query.count(),
                 "cases":     Case.query.count(),
                 "documents": Document.query.count(),
                 "notes":     Note.query.count(),
@@ -516,18 +518,24 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         settings = get_firm_settings(firm_id)
         ai_lang = settings.ai_language
         
+        # Persist the user's message up-front so it survives a mid-stream
+        # disconnect (the AI reply is saved once the stream completes).
+        db.session.add(ChatMessage(case_id=case_id, role="user", content=user_msg))
+        db.session.commit()
+
         def generate():
             full_response = ""
-            for text in stream_legal_chat(user_msg, relevant, history, case_context, doc_summaries, judgment_summaries, case_notes, language=ai_lang, hearing_records=hearing_records):
-                full_response += text
-                yield text
-            
-            # 3. Persist exchange to DB after stream finishes
-            with app.app_context():
-                db.session.add(ChatMessage(case_id=case_id, role="user", content=user_msg))
-                db.session.add(ChatMessage(case_id=case_id, role="ai", content=full_response))
-                db.session.commit()
-                
+            try:
+                for text in stream_legal_chat(user_msg, relevant, history, case_context, doc_summaries, judgment_summaries, case_notes, language=ai_lang, hearing_records=hearing_records):
+                    full_response += text
+                    yield text
+            finally:
+                # Persist whatever was generated, even on early client disconnect.
+                if full_response:
+                    with app.app_context():
+                        db.session.add(ChatMessage(case_id=case_id, role="ai", content=full_response))
+                        db.session.commit()
+
         return Response(generate(), mimetype='text/event-stream')
 
     @app.post("/get-doc")

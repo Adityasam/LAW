@@ -41,17 +41,9 @@ class Config:
 
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
     GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME", "models/gemini-3.1-flash-lite-preview")
+    # Embedding model used by chunker.py for semantic retrieval.
+    EMBEDDING_MODEL_NAME = os.environ.get("EMBEDDING_MODEL_NAME", "gemini-embedding-001")
 
     # --- App metadata ---
     APP_NAME = "LegalMind"
-    APP_VERSION = "0.1.0"
     DEBUG = True
-
-
-class ProductionConfig(Config):
-    DEBUG = False
-
-
-class TestingConfig(Config):
-    TESTING = True
-    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"

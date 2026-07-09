@@ -13,13 +13,13 @@
     - **Live Research**: Top-3 relevant judgments fetched from **Indian Kanoon**.
 - **Unified Documents Repository**: A centralized view of every document across all active matters, with instant AI-powered search and summary previews.
 - **Active Matters Management**: Track Criminal and Civil cases with hearing dates, sections (BNS/IPC/BSA), and counsel assignments.
-- **Persistent Vector DB**: Case-specific JSON-based vector stores that index facts, judgment HTML, and document text for precise retrieval during chat.
+- **Persistent Vector DB**: Case-specific semantic vector stores (Gemini embeddings) that index facts, judgment HTML, and document text for precise cosine-similarity retrieval during chat.
 
 ## Tech Stack
 
 - **Backend**: Python 3.9+, Flask, SQLAlchemy (SQLite)
 - **AI/LLM**: Google Gemini 1.5 & 3.1 Flash (Multi-modal for OCR + RAG)
-- **Vector Storage**: Custom JSON-based persistent indexing (in `data/vectors/`)
+- **Vector Storage**: Gemini embeddings (`gemini-embedding-001`) with cosine similarity, persisted as JSON in `data/vectors/` (lexical keyword overlap as fallback)
 - **Frontend**: Vanilla JS (Modular), Modern CSS3, Jinja2 Templates, Marked.js (Markdown rendering)
 - **APIs**: Indian Kanoon API integration
 
@@ -48,14 +48,14 @@ GEMINI_MODEL_NAME=models/gemini-3.1-flash-lite-preview
 
 ### 3. Running the App
 ```bash
-python run.py
+python app.py
 ```
 Visit `http://localhost:5000` to access your workspace.
 
 ## Architecture
 
 - `app.py`: Application factory and core API endpoints.
-- `models.py`: Database schema for Cases, Documents, Judgments, and Chat history.
+- `models.py`: Database schema for Firms, Cases, Documents, Judgments, Hearings, and Chat history.
 - `routes/`: Modular blueprints for Cases, Documents, and Chat logic.
 - `services/doc_processor.py`: Multi-modal Gemini integration for OCR and document analysis.
 - `advisor.py`: RAG orchestration and streaming chat response generation.

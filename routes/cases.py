@@ -10,20 +10,11 @@ from flask import Blueprint, jsonify, request, current_app, session
 
 from models import Case, db, Judgment
 from keyExtractor import extract_case_entities
-from chunker import create_vector_db, vector_db_exists
-from advisor import get_legal_advice, fetch_doc_by_id, client
+from chunker import create_vector_db
+from advisor import fetch_kanoon_results, fetch_doc_by_id, client
+from routes._auth import login_required_api
 
 cases_bp = Blueprint("cases", __name__, url_prefix="/cases")
-
-
-def login_required_api(f):
-    from functools import wraps
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'firm_id' not in session:
-            return jsonify({"ok": False, "error": "Unauthorized"}), 401
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 def _parse_date(s: Optional[str]):
@@ -56,8 +47,8 @@ def process_case_background(app_instance, case_id, facts):
             if case:
                 firm_id = case.firm_id
 
-            research_data = get_legal_advice(facts, analysis, firm_id=firm_id)
-            judgments_meta = research_data.get("judgments", [])
+            queries = analysis.get("suggested_kanoon_queries", [])
+            judgments_meta = fetch_kanoon_results(queries, firm_id=firm_id)
 
             # 3. Update Case record with summary and sections
             case = db.session.query(Case).get(case_id)
@@ -140,16 +131,23 @@ def process_case_background(app_instance, case_id, facts):
 
 
 @cases_bp.get("/")
+@login_required_api
 def list_cases():
-    """GET /cases — list every case (lightweight payload)."""
-    rows = Case.query.order_by(Case.id.desc()).all()
+    """GET /cases — list the current firm's cases (lightweight payload)."""
+    rows = (
+        Case.query
+        .filter_by(firm_id=session["firm_id"])
+        .order_by(Case.id.desc())
+        .all()
+    )
     return jsonify({"ok": True, "count": len(rows), "cases": [c.to_dict() for c in rows]})
 
 
 @cases_bp.get("/<int:case_id>")
+@login_required_api
 def get_case(case_id: int):
-    """GET /cases/<id> — single case with documents and notes embedded."""
-    case = db.session.get(Case, case_id)
+    """GET /cases/<id> — single case (firm-scoped) with documents and notes embedded."""
+    case = Case.query.filter_by(id=case_id, firm_id=session["firm_id"]).first()
     if not case:
         return jsonify({"ok": False, "error": "Case not found"}), 404
     return jsonify({"ok": True, "case": case.to_dict(include_relations=True)})

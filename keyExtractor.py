@@ -107,19 +107,3 @@ def extract_case_entities(case_description: str) -> dict:
         }
 
     return result
-
-
-# ── Quick Test ─────────────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    test_description = """
-    My client Ramesh Sharma was arrested under BNS 103 for murder. 
-    The FIR was filed by the deceased's brother claiming my client 
-    intentionally killed the deceased during a land dispute in Indore 
-    on 15th March 2024. My client claims he acted in self defence as 
-    the deceased attacked him first with a weapon. We need bail 
-    urgently from Sessions Court. Client has no prior criminal record.
-    """
-
-    result = extract_case_entities(test_description)
-    print(json.dumps(result, indent=2))
